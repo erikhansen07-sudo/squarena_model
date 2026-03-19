@@ -47,23 +47,6 @@
 </head>
 <body>
 <div id="app"></div>
-<div id="tok-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center" onclick="if(event.target===this)hideTokenModal()">
-  <div style="background:#fff;border-radius:12px;padding:28px;width:420px;box-shadow:0 24px 64px rgba(0,0,0,.25)">
-    <div style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:6px">GitHub Sync</div>
-    <div style="font-size:12px;color:#64748b;margin-bottom:16px;line-height:1.6">
-      Enter a GitHub <strong>Personal Access Token</strong> (classic) with <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">repo</code> scope.
-      The token is stored only in your browser — never in the code.
-    </div>
-    <input id="tok-input" type="password" placeholder="ghp_xxxxxxxxxxxx"
-      style="width:100%;padding:9px 11px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;margin-bottom:14px;outline:none"
-      onkeydown="if(event.key==='Enter')applyToken()">
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="disconnectToken()" style="background:#fee2e2;color:#e11d48;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Disconnect</button>
-      <button onclick="hideTokenModal()" style="background:#f1f5f9;color:#64748b;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Cancel</button>
-      <button onclick="applyToken()" style="background:#0284c7;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Connect &amp; Sync</button>
-    </div>
-  </div>
-</div>
 <script>
 // ─── Constants ─────────────────────────────────────────────────────────────
 const RAMP=[.50,.70,.88,1.00,1.00];
@@ -88,30 +71,24 @@ let S=DEFAULTS;
 try{const raw=localStorage.getItem('sq-state');if(raw){S=JSON.parse(raw);nid=Math.max(...S.units.map(u=>u.id))+1;}}catch(e){}
 function save(){try{localStorage.setItem('sq-state',JSON.stringify(S));}catch(e){}}
 
-// ─── GitHub Sync ─────────────────────────────────────────────────────────────
-const REPO='erikhansen07-sudo/squarena_model';
-const SFILE='state.json';
-let ghSHA='';
+// ─── JSONbin Sync ─────────────────────────────────────────────────────────────
+const BIN_ID='69bc5a8cc3097a1dd53e9d88';
+const BIN_KEY='$2a$10$TGUOkdJsNiFEsQ87swVaneQdKM6DmD903OZ1gAHEWmgSQeDsXBsau';
+const BIN_URL=`https://api.jsonbin.io/v3/b/${BIN_ID}`;
 let syncStatus='idle'; // idle | loading | saving | saved | error
 
-function getToken(){return localStorage.getItem('sq-gh-token')||'';}
-function setToken(t){t?localStorage.setItem('sq-gh-token',t):localStorage.removeItem('sq-gh-token');}
-
 async function ghLoad(){
-  const token=getToken();
-  if(!token){syncStatus='idle';return;}
   syncStatus='loading';render();
   try{
-    const res=await fetch(`https://api.github.com/repos/${REPO}/contents/${SFILE}`,{
-      headers:{Authorization:`token ${token}`,Accept:'application/vnd.github.v3+json'}
-    });
+    const res=await fetch(BIN_URL+'/latest',{headers:{'X-Master-Key':BIN_KEY}});
     if(!res.ok)throw new Error(res.status);
     const data=await res.json();
-    ghSHA=data.sha;
-    const parsed=JSON.parse(atob(data.content.replace(/\n/g,'')));
-    S={...DEFAULTS,...parsed,units:parsed.units||DEFAULTS.units};
-    nid=Math.max(...S.units.map(u=>u.id))+1;
-    save();
+    const parsed=data.record;
+    if(parsed&&parsed.units&&parsed.units.length){
+      S={...DEFAULTS,...parsed,units:parsed.units};
+      nid=Math.max(...S.units.map(u=>u.id))+1;
+      save();
+    }
     syncStatus='saved';
   }catch(e){syncStatus='error';}
   render();
@@ -119,38 +96,18 @@ async function ghLoad(){
 
 async function ghSave(){
   save();
-  const token=getToken();
-  if(!token)return;
   syncStatus='saving';render();
   try{
-    const content=btoa(unescape(encodeURIComponent(JSON.stringify(S,null,2))));
-    const body={message:'Update proforma state',content};
-    if(ghSHA)body.sha=ghSHA;
-    const res=await fetch(`https://api.github.com/repos/${REPO}/contents/${SFILE}`,{
+    const res=await fetch(BIN_URL,{
       method:'PUT',
-      headers:{Authorization:`token ${token}`,Accept:'application/vnd.github.v3+json','Content-Type':'application/json'},
-      body:JSON.stringify(body)
+      headers:{'X-Master-Key':BIN_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify(S)
     });
     if(!res.ok)throw new Error(res.status);
-    const data=await res.json();
-    ghSHA=data.content.sha;
     syncStatus='saved';
   }catch(e){syncStatus='error';}
   render();
 }
-
-function showTokenModal(){
-  document.getElementById('tok-modal').style.display='flex';
-  document.getElementById('tok-input').value=getToken();
-  setTimeout(()=>document.getElementById('tok-input').focus(),50);
-}
-function hideTokenModal(){document.getElementById('tok-modal').style.display='none';}
-function applyToken(){
-  const t=document.getElementById('tok-input').value.trim();
-  setToken(t);hideTokenModal();
-  if(t)ghLoad();else{syncStatus='idle';render();}
-}
-function disconnectToken(){setToken('');ghSHA='';syncStatus='idle';hideTokenModal();render();}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 const $=n=>'$'+Math.round(n).toLocaleString('en-US');
@@ -372,50 +329,41 @@ function rUnits(){
     `${l} <span style="font-size:10px;color:#cbd5e1">${n}</span>`,
     `(${$(v)})`,'#64748b',false,true)).join('');
 
-  // 5-year projection for selected unit
-  let cum5=0;
-  const fy5rows=RAMP.map((ramp,i)=>{
-    const yr=sel.oy+i;
-    const rc=cu(sel,ramp);
-    cum5+=rc.ebitda;
-    const paidBack=cum5>=c.tCapex;
-    const justPaid=paidBack&&(cum5-rc.ebitda)<c.tCapex;
-    return`<tr style="background:${justPaid?'#f0fdf4':i%2===0?'#fff':'#fafbfc'};${justPaid?'font-weight:600':''}">
-      <td style="color:#334155">Year ${i+1} <span style="font-size:11px;color:#94a3b8;font-weight:400">(${yr})</span>
-        ${justPaid?`<span style="font-size:10px;font-weight:700;color:${GR};margin-left:6px">✓ Paid back</span>`:''}
-      </td>
-      <td style="color:#94a3b8">${ramp*100}%</td>
-      <td style="color:${CY}">${$(rc.rev)}</td>
-      <td style="color:${AM}">${$(rc.ebPre)}</td>
-      <td style="color:${PU}">(${$(rc.erikRS)})</td>
-      <td style="color:${rc.ebitda>0?CY:PK};font-weight:600">${$(rc.ebitda)}</td>
-      <td>${P(rc.margin)}</td>
-      <td style="color:${cum5>=c.tCapex?GR:'#334155'};font-weight:600">${$(cum5)}</td>
-    </tr>`;
-  }).join('');
-
   return`<div class="g2">
     <div>
       <div class="card"><div class="card-title">Select Location</div>${cards}</div>
+      <div class="card">
+        <div class="card-title">Investment — ${esc(sel.name)}</div>
+        ${pr('CAPEX (entered)',$(sel.capex),'#334155')}
+        ${pr('Dev Fee',$(sel.devFee),PU)}
+        ${pr('Total CAPEX',$(c.tCapex),CY,true,false,14)}
+        <div style="height:8px"></div>
+        ${pr('Annual EBITDA',$(c.ebitda),CY)}
+        ${pr('Simple Payback',c.payback<50?c.payback.toFixed(1)+' yrs':'N/A','#64748b')}
+        ${pr('Return on CAPEX',P(c.coc),c.coc>20?GR:AM)}
+      </div>
     </div>
     <div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">${mets}</div>
       <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-          <div class="card-title" style="margin-bottom:0">5-Year P&L — ${esc(sel.name)}</div>
-          <div style="font-size:11px;color:#94a3b8">Total CAPEX: <strong style="color:#334155">${$(c.tCapex)}</strong></div>
+        <div class="card-title">Annual P&L — ${esc(sel.name)}</div>
+        ${pr('▸ Revenue',$(c.rev),CY,true,false,14)}
+        ${pr(`Session revenue (${sel.rooms}r × ${r.sessions}/day × ${P(r.util)} util)`,$(c.sessRev),'#334155',false,true)}
+        ${pr(`Add-on revenue (${P(r.addon)} of session rev)`,$(c.addonRev),'#334155',false,true)}
+
+        ${pr('▸ Operating Costs',`(${$(c.opexPre)})`,PK,true,false,14)}
+        ${cRows}
+
+        <div style="border-top:1px dashed #e2e8f0;margin:6px 0"></div>
+        ${pr('Pre-Erik EBITDA',$(c.ebPre),AM,true,false,14)}
+
+        <div style="margin-top:4px;padding:8px 0 0">
+          <div style="font-size:11px;font-weight:700;color:#7c3aed;letter-spacing:.5px;margin-bottom:4px">ERIK FEES</div>
         </div>
-        <div style="overflow-x:auto">
-          <table>
-            <thead><tr>${['Year','Ramp','Revenue','Pre-Erik EBITDA','Erik Rev Share','EBITDA','Margin','Cumulative EBITDA'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
-            <tbody>${fy5rows}</tbody>
-          </table>
-        </div>
-        <div style="margin-top:12px;padding:10px 14px;background:${c.payback<5?'#f0fdf4':'#f8fafc'};border:1px solid ${c.payback<5?'#bbf7d0':'#e2e8f0'};border-radius:8px;font-size:12px;color:${c.payback<5?'#15803d':'#64748b'}">
-          <strong>CAPEX Payback:</strong> ${c.payback<50?c.payback.toFixed(1)+' yrs':'N/A'} &nbsp;·&nbsp;
-          <strong>Y1 Cash-on-Cash:</strong> ${P(c.coc)} &nbsp;·&nbsp;
-          <strong>Steady-State EBITDA:</strong> ${$(cu(sel,1).ebitda)}/yr
-        </div>
+        ${pr(`Rev Share (${P(sel.revShare)} × Pre-Erik EBITDA)`,`(${$(c.erikRS)})`,PU,false,true)}
+
+        <div style="border-top:2px solid #e2e8f0;margin:6px 0"></div>
+        ${pr('EBITDA',$(c.ebitda),c.ebitda>0?CY:PK,true,false,15)}
       </div>
     </div>
   </div>`;
@@ -558,6 +506,9 @@ function rSale(){
           ${pr(`× Multiple`,em+'×','#334155')}
           <div style="border-top:2px solid #e2e8f0;margin:6px 0"></div>
           ${pr('Implied Sale Price',$(eSale),CY,true,false,15)}
+          ${pr('Less: Total CAPEX',`(${$(P2.tCX)})`,'#64748b')}
+          <div style="border-top:1px solid #e2e8f0;margin:4px 0"></div>
+          ${pr('Net Gain',$(eGain),eGain>0?GR:PK,true)}
           ${pr('Return Multiple',eRet.toFixed(2)+'×',eRet>2?GR:AM,true)}
         </div>
       </div>
@@ -569,6 +520,9 @@ function rSale(){
           ${pr('× Multiple',rm+'×','#334155')}
           <div style="border-top:2px solid #e2e8f0;margin:6px 0"></div>
           ${pr('Implied Sale Price',$(rSale),AM,true,false,15)}
+          ${pr('Less: Total CAPEX',`(${$(P2.tCX)})`,'#64748b')}
+          <div style="border-top:1px solid #e2e8f0;margin:4px 0"></div>
+          ${pr('Net Gain',$(rGain),rGain>0?GR:PK,true)}
           ${pr('Return Multiple',rRet.toFixed(2)+'×',rRet>2?GR:AM,true)}
         </div>
       </div>
@@ -635,10 +589,9 @@ function render(){
       </div>
       <div style="margin-left:auto;display:flex;align-items:center;gap:14px">
         ${(()=>{
-          const connected=!!getToken();
-          const map={idle:{bg:'#f1f5f9',c:'#64748b',t:'🔗 Connect GitHub'},loading:{bg:'#eff6ff',c:'#0284c7',t:'⟳ Loading…'},saving:{bg:'#eff6ff',c:'#0284c7',t:'⟳ Saving…'},saved:{bg:'#f0fdf4',c:'#16a34a',t:'✓ Synced'},error:{bg:'#fff1f2',c:'#e11d48',t:'⚠ Sync Error'}};
+          const map={idle:{bg:'#f1f5f9',c:'#64748b',t:'⟳ Connecting…'},loading:{bg:'#eff6ff',c:'#0284c7',t:'⟳ Loading…'},saving:{bg:'#eff6ff',c:'#0284c7',t:'⟳ Saving…'},saved:{bg:'#f0fdf4',c:'#16a34a',t:'✓ Synced'},error:{bg:'#fff1f2',c:'#e11d48',t:'⚠ Sync Error — Refresh'}};
           const s=map[syncStatus]||map.idle;
-          return`<button onclick="showTokenModal()" style="background:${s.bg};color:${s.c};border:none;border-radius:20px;padding:5px 13px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.3px">${s.t}</button>`;
+          return`<span style="background:${s.bg};color:${s.c};border-radius:20px;padding:5px 13px;font-size:11px;font-weight:700;letter-spacing:.3px">${s.t}</span>`;
         })()}
         ${LOGO}
       </div>
@@ -691,7 +644,7 @@ function delUnit(id){
   render();ghSave();
 }
 
-// On startup: try GitHub first, fall back to localStorage
+// On startup: load from JSONbin, fall back to localStorage
 render();
 ghLoad();
 </script>
