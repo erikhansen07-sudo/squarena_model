@@ -71,19 +71,15 @@ let S=DEFAULTS;
 try{const raw=localStorage.getItem('sq-state');if(raw){S=JSON.parse(raw);nid=Math.max(...S.units.map(u=>u.id))+1;}}catch(e){}
 function save(){try{localStorage.setItem('sq-state',JSON.stringify(S));}catch(e){}}
 
-// ─── JSONbin Sync ─────────────────────────────────────────────────────────────
-const BIN_ID='69bc5a8cc3097a1dd53e9d88';
-const BIN_KEY='$2a$10$TGUOkdJsNiFEsQ87swVaneQdKM6DmD903OZ1gAHEWmgSQeDsXBsau';
-const BIN_URL=`https://api.jsonbin.io/v3/b/${BIN_ID}`;
+// ─── JSONblob Sync ────────────────────────────────────────────────────────────
+const BLOB_URL='https://jsonblob.com/api/jsonBlob/019d0882-eea9-7f5a-bce1-f9fcaa3e41bc';
 let syncStatus='idle'; // idle | loading | saving | saved | error
 
 async function ghLoad(){
   syncStatus='loading';render();
   try{
-    const res=await fetch(BIN_URL+'/latest',{
-      headers:{'X-Master-Key':BIN_KEY,'X-Bin-Meta':'false'}
-    });
-    if(!res.ok){const t=await res.text();console.error('Load failed:',res.status,t);throw new Error(res.status);}
+    const res=await fetch(BLOB_URL);
+    if(!res.ok)throw new Error(res.status);
     const parsed=await res.json();
     if(parsed&&parsed.units&&parsed.units.length){
       S={...DEFAULTS,...parsed,units:parsed.units};
@@ -99,12 +95,12 @@ async function ghSave(){
   save();
   syncStatus='saving';render();
   try{
-    const res=await fetch(BIN_URL,{
+    const res=await fetch(BLOB_URL,{
       method:'PUT',
-      headers:{'X-Master-Key':BIN_KEY,'Content-Type':'application/json','X-Bin-Meta':'false'},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify(S)
     });
-    if(!res.ok){const t=await res.text();console.error('Save failed:',res.status,t);throw new Error(res.status);}
+    if(!res.ok)throw new Error(res.status);
     syncStatus='saved';
   }catch(e){console.error('Sync save error:',e);syncStatus='error';}
   render();
