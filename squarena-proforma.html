@@ -80,17 +80,18 @@ let syncStatus='idle'; // idle | loading | saving | saved | error
 async function ghLoad(){
   syncStatus='loading';render();
   try{
-    const res=await fetch(BIN_URL+'/latest',{headers:{'X-Master-Key':BIN_KEY}});
-    if(!res.ok)throw new Error(res.status);
-    const data=await res.json();
-    const parsed=data.record;
+    const res=await fetch(BIN_URL+'/latest',{
+      headers:{'X-Master-Key':BIN_KEY,'X-Bin-Meta':'false'}
+    });
+    if(!res.ok){const t=await res.text();console.error('Load failed:',res.status,t);throw new Error(res.status);}
+    const parsed=await res.json();
     if(parsed&&parsed.units&&parsed.units.length){
       S={...DEFAULTS,...parsed,units:parsed.units};
       nid=Math.max(...S.units.map(u=>u.id))+1;
       save();
     }
     syncStatus='saved';
-  }catch(e){syncStatus='error';}
+  }catch(e){console.error('Sync load error:',e);syncStatus='error';}
   render();
 }
 
@@ -100,12 +101,12 @@ async function ghSave(){
   try{
     const res=await fetch(BIN_URL,{
       method:'PUT',
-      headers:{'X-Master-Key':BIN_KEY,'Content-Type':'application/json'},
+      headers:{'X-Master-Key':BIN_KEY,'Content-Type':'application/json','X-Bin-Meta':'false'},
       body:JSON.stringify(S)
     });
-    if(!res.ok)throw new Error(res.status);
+    if(!res.ok){const t=await res.text();console.error('Save failed:',res.status,t);throw new Error(res.status);}
     syncStatus='saved';
-  }catch(e){syncStatus='error';}
+  }catch(e){console.error('Sync save error:',e);syncStatus='error';}
   render();
 }
 
@@ -187,16 +188,7 @@ function mc(label,val,accent,sub=''){
   </div>`;
 }
 
-const LOGO=`<svg viewBox="0 0 420 64" style="height:40px;display:block">
-  <defs><linearGradient id="lg" x1="0%" x2="100%" y1="0%" y2="0%">
-    <stop offset="0%" stop-color="#00D4FF"/><stop offset="40%" stop-color="#c8f0ff"/>
-    <stop offset="50%" stop-color="#ffffff"/><stop offset="62%" stop-color="#ffc8e0"/>
-    <stop offset="100%" stop-color="#FF2D78"/>
-  </linearGradient></defs>
-  <rect width="420" height="64" rx="6" fill="#111"/>
-  <text x="18" y="50" font-family="'Arial Black','Impact',sans-serif" font-size="52"
-    font-weight="900" font-style="italic" fill="url(#lg)" letter-spacing="-1">SQUARENA</text>
-</svg>`;
+const LOGO=`<img src="logo.png" style="height:40px;display:block;object-fit:contain">`;
 
 // ─── Tab: Locations ────────────────────────────────────────────────────────
 function rLoc(){
