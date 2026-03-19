@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Squarena — Franchisee Proforma</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,sans-serif;background:#f1f5f9;color:#0f172a;min-height:100vh}
+    .label{font-size:11px;color:#64748b;margin-bottom:4px;display:block;font-weight:600;letter-spacing:.3px}
+    .card-title{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+    .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .g6{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+    .content{padding:24px;max-width:1320px}
+    .iw{position:relative}
+    .iw .pre{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:12px;font-weight:600;pointer-events:none}
+    .iw .suf{position:absolute;right:9px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:12px;pointer-events:none}
+    input[type=number],select,input[type=text]{width:100%;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:7px 9px;color:#0f172a;font-size:13px;outline:none;transition:border-color .15s}
+    input:focus,select:focus{border-color:#0284c7;background:#fff;box-shadow:0 0 0 3px rgba(2,132,199,.1)}
+    .hp{padding-left:20px!important}.hs{padding-right:26px!important}
+    .btn{background:#0284c7;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer}
+    .btn:hover{background:#0369a1}
+    .btn-sm{background:#e0f2fe;color:#0284c7;border:none;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer}
+    .btn-del{background:transparent;color:#e11d48;border:1px solid #fda4af;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{text-align:left;padding:8px 12px;font-size:11px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #f1f5f9}
+    td{padding:10px 12px;border-bottom:1px solid #f8fafc}
+    .plr{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9}
+    .mc{border-radius:10px;padding:16px 18px;background:#fff;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+    .tab-bar{display:flex;border-bottom:2px solid #e2e8f0;background:#fff;padding:0 24px}
+    .tab-btn{padding:13px 16px;cursor:pointer;font-size:13px;font-weight:600;color:#94a3b8;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
+    .tab-btn:hover{color:#475569}
+    .tab-btn.active{color:#0284c7;border-bottom-color:#0284c7}
+    .usc{padding:12px 14px;border-radius:8px;cursor:pointer;margin-bottom:8px;border:1px solid #e2e8f0;transition:all .15s}
+    .usc:hover{border-color:#bae6fd;background:#f0f9ff}
+    .hint{padding:9px 13px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;font-size:11px;color:#94a3b8;margin-top:10px}
+    .sdiv{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;padding:14px 0 10px;border-top:1px solid #f1f5f9;margin-top:8px}
+    .lsec{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-top:10px}
+    .lsec-title{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px}
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-track{background:#f1f5f9}
+    ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<div id="tok-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center" onclick="if(event.target===this)hideTokenModal()">
+  <div style="background:#fff;border-radius:12px;padding:28px;width:420px;box-shadow:0 24px 64px rgba(0,0,0,.25)">
+    <div style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:6px">GitHub Sync</div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:16px;line-height:1.6">
+      Enter a GitHub <strong>Personal Access Token</strong> (classic) with <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">repo</code> scope.
+      The token is stored only in your browser — never in the code.
+    </div>
+    <input id="tok-input" type="password" placeholder="ghp_xxxxxxxxxxxx"
+      style="width:100%;padding:9px 11px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;margin-bottom:14px;outline:none"
+      onkeydown="if(event.key==='Enter')applyToken()">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="disconnectToken()" style="background:#fee2e2;color:#e11d48;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Disconnect</button>
+      <button onclick="hideTokenModal()" style="background:#f1f5f9;color:#64748b;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Cancel</button>
+      <button onclick="applyToken()" style="background:#0284c7;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Connect &amp; Sync</button>
+    </div>
+  </div>
+</div>
+<script>
+// ─── Constants ─────────────────────────────────────────────────────────────
+const RAMP=[.50,.70,.88,1.00,1.00];
+const CY='#0284c7',PK='#e11d48',GR='#16a34a',AM='#d97706',PU='#7c3aed';
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+// ─── State ─────────────────────────────────────────────────────────────────
+const DEFAULTS={
+  tab:'portfolio',sel:1,
+  rev:{sessions:5,price:130,util:85,addon:8},
+  costs:{royalty:6,branddev:2},
+  sale:{em:4,rm:1.5},
+  units:[
+    {id:1,name:'Solana Beach',  om:1,oy:2026,rooms:2,capex:150000,rent:6500,
+     mCogs:2500,mLabor:9250,mMktg:1500,mMisc:1500,devFee:35000,revShare:10},
+    {id:2,name:'Mission Valley',om:1,oy:2027,rooms:3,capex:185000,rent:8500,
+     mCogs:2500,mLabor:9250,mMktg:1500,mMisc:1500,devFee:35000,revShare:10},
+  ]
+};
+let nid=3;
+let S=DEFAULTS;
+try{const raw=localStorage.getItem('sq-state');if(raw){S=JSON.parse(raw);nid=Math.max(...S.units.map(u=>u.id))+1;}}catch(e){}
+function save(){try{localStorage.setItem('sq-state',JSON.stringify(S));}catch(e){}}
+
+// ─── GitHub Sync ─────────────────────────────────────────────────────────────
+const REPO='erikhansen07-sudo/squarena_model';
+const SFILE='state.json';
+let ghSHA='';
+let syncStatus='idle'; // idle | loading | saving | saved | error
+
+function getToken(){return localStorage.getItem('sq-gh-token')||'';}
+function setToken(t){t?localStorage.setItem('sq-gh-token',t):localStorage.removeItem('sq-gh-token');}
+
+async function ghLoad(){
+  const token=getToken();
+  if(!token){syncStatus='idle';return;}
+  syncStatus='loading';render();
+  try{
+    const res=await fetch(`https://api.github.com/repos/${REPO}/contents/${SFILE}`,{
+      headers:{Authorization:`token ${token}`,Accept:'application/vnd.github.v3+json'}
+    });
+    if(!res.ok)throw new Error(res.status);
+    const data=await res.json();
+    ghSHA=data.sha;
+    const parsed=JSON.parse(atob(data.content.replace(/\n/g,'')));
+    S={...DEFAULTS,...parsed,units:parsed.units||DEFAULTS.units};
+    nid=Math.max(...S.units.map(u=>u.id))+1;
+    save();
+    syncStatus='saved';
+  }catch(e){syncStatus='error';}
+  render();
+}
+
+async function ghSave(){
+  save();
+  const token=getToken();
+  if(!token)return;
+  syncStatus='saving';render();
+  try{
+    const content=btoa(unescape(encodeURIComponent(JSON.stringify(S,null,2))));
+    const body={message:'Update proforma state',content};
+    if(ghSHA)body.sha=ghSHA;
+    const res=await fetch(`https://api.github.com/repos/${REPO}/contents/${SFILE}`,{
+      method:'PUT',
+      headers:{Authorization:`token ${token}`,Accept:'application/vnd.github.v3+json','Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    if(!res.ok)throw new Error(res.status);
+    const data=await res.json();
+    ghSHA=data.content.sha;
+    syncStatus='saved';
+  }catch(e){syncStatus='error';}
+  render();
+}
+
+function showTokenModal(){
+  document.getElementById('tok-modal').style.display='flex';
+  document.getElementById('tok-input').value=getToken();
+  setTimeout(()=>document.getElementById('tok-input').focus(),50);
+}
+function hideTokenModal(){document.getElementById('tok-modal').style.display='none';}
+function applyToken(){
+  const t=document.getElementById('tok-input').value.trim();
+  setToken(t);hideTokenModal();
+  if(t)ghLoad();else{syncStatus='idle';render();}
+}
+function disconnectToken(){setToken('');ghSHA='';syncStatus='idle';hideTokenModal();render();}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+const $=n=>'$'+Math.round(n).toLocaleString('en-US');
+const $k=n=>'$'+(Math.abs(n)/1000).toFixed(0)+'k';
+const $m=n=>Math.abs(n)>=1e6?'$'+(n/1e6).toFixed(2)+'M':$(n);
+const P=n=>n.toFixed(1)+'%';
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// ─── Calc ──────────────────────────────────────────────────────────────────
+function cu(u,ramp=1){
+  const r=S.rev,c=S.costs;
+  const sessRev=u.rooms*r.sessions*r.price*(r.util/100)*365*ramp;
+  const addonRev=sessRev*r.addon/100;
+  const rev=sessRev+addonRev;
+  const cogs=u.mCogs*12,labor=u.mLabor*12,rent=u.rent*12,mktg=u.mMktg*12,misc=u.mMisc*12;
+  const royal=rev*c.royalty/100,bd=rev*c.branddev/100;
+  const opexPre=cogs+labor+rent+mktg+misc+royal+bd;
+  const ebPre=rev-opexPre;
+  const erikRS=Math.max(0,ebPre)*u.revShare/100;
+  const opex=opexPre+erikRS;
+  const ebitda=rev-opex;
+  const margin=rev>0?ebitda/rev*100:0;
+  const tCapex=u.capex+u.devFee;
+  const payback=ebitda>0?tCapex/ebitda:Infinity;
+  const coc=tCapex>0?ebitda/tCapex*100:0;
+  return{sessRev,addonRev,rev,cogs,labor,rent,mktg,misc,royal,bd,opexPre,ebPre,erikRS,opex,ebitda,margin,tCapex,payback,coc};
+}
+
+function port(){
+  const res=S.units.map(u=>({...u,c:cu(u)}));
+  const tRev=res.reduce((s,r)=>s+r.c.rev,0);
+  const tEB=res.reduce((s,r)=>s+r.c.ebitda,0);
+  const tCX=res.reduce((s,r)=>s+r.c.tCapex,0);
+  return{res,tRev,tEB,tCX,blend:tRev>0?tEB/tRev*100:0,payback:tEB>0?tCX/tEB:Infinity,coc:tCX>0?tEB/tCX*100:0};
+}
+
+function fy5(){
+  const minY=Math.min(...S.units.map(u=>u.oy));
+  return Array.from({length:5},(_,i)=>{
+    const yr=minY+i;
+    let rev=0,eb=0;
+    S.units.forEach(u=>{
+      const n=yr-u.oy;
+      if(n<0)return;
+      const ramp=RAMP[Math.min(n,4)];
+      const c=cu(u,ramp);
+      rev+=c.rev;eb+=c.ebitda;
+    });
+    return{yr,rev,eb,margin:rev>0?eb/rev*100:0,ramp:i<5?RAMP[i]*100:100};
+  });
+}
+
+// ─── UI Helpers ────────────────────────────────────────────────────────────
+function ni(id,label,val,{pre,suf,step=1,min}={}){
+  return`<div>
+    <label class="label" for="${id}">${esc(label)}</label>
+    <div class="iw">
+      ${pre?`<span class="pre">${esc(pre)}</span>`:''}
+      <input type="number" id="${id}" value="${val}" step="${step}"${min!=null?` min="${min}"`:''}
+        class="${pre?'hp':''} ${suf?'hs':''}" onchange="inp('${id}',this.value)">
+      ${suf?`<span class="suf">${esc(suf)}</span>`:''}
+    </div></div>`;
+}
+
+function pr(label,val,color='#334155',bold=false,indent=false,sz=13){
+  return`<div class="plr" style="${indent?'padding-left:14px':''}">
+    <span style="font-size:${sz}px;color:${bold?'#1e293b':'#64748b'};${bold?'font-weight:700':''}">${label}</span>
+    <span style="font-size:${sz}px;font-weight:${bold?700:500};color:${color}">${val}</span>
+  </div>`;
+}
+
+function mc(label,val,accent,sub=''){
+  return`<div class="mc" style="border-top:3px solid ${accent}">
+    <div style="font-size:19px;font-weight:700;color:${accent};line-height:1.3">${esc(val)}</div>
+    ${sub?`<div style="font-size:11px;color:#94a3b8;margin-top:2px">${esc(sub)}</div>`:''}
+    <div style="font-size:11px;color:#94a3b8;margin-top:5px">${esc(label)}</div>
+  </div>`;
+}
+
+const LOGO=`<svg viewBox="0 0 420 64" style="height:40px;display:block">
+  <defs><linearGradient id="lg" x1="0%" x2="100%" y1="0%" y2="0%">
+    <stop offset="0%" stop-color="#00D4FF"/><stop offset="40%" stop-color="#c8f0ff"/>
+    <stop offset="50%" stop-color="#ffffff"/><stop offset="62%" stop-color="#ffc8e0"/>
+    <stop offset="100%" stop-color="#FF2D78"/>
+  </linearGradient></defs>
+  <rect width="420" height="64" rx="6" fill="#111"/>
+  <text x="18" y="50" font-family="'Arial Black','Impact',sans-serif" font-size="52"
+    font-weight="900" font-style="italic" fill="url(#lg)" letter-spacing="-1">SQUARENA</text>
+</svg>`;
+
+// ─── Tab: Locations ────────────────────────────────────────────────────────
+function rLoc(){
+  const yrs=[2024,2025,2026,2027,2028,2029,2030];
+  const uHTML=S.units.map(u=>`
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <input type="text" id="un-${u.id}" value="${esc(u.name)}"
+          style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:7px 10px;color:#0f172a;font-size:15px;font-weight:700;flex:1;margin-right:12px;outline:none"
+          onchange="inp('un-${u.id}',this.value)">
+        ${S.units.length>1?`<button class="btn-del" onclick="delUnit(${u.id})">Remove</button>`:''}
+      </div>
+
+      <div class="g4" style="margin-bottom:12px">
+        <div>
+          <label class="label">Open Month</label>
+          <select id="uom-${u.id}" oninput="inp('uom-${u.id}',this.value)">
+            ${MONTHS.map((m,i)=>`<option value="${i+1}"${u.om==i+1?' selected':''}>${m}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="label">Open Year</label>
+          <select id="uoy-${u.id}" oninput="inp('uoy-${u.id}',this.value)">
+            ${yrs.map(y=>`<option value="${y}"${u.oy==y?' selected':''}>${y}</option>`).join('')}
+          </select>
+        </div>
+        ${ni(`ur-${u.id}`,'Rooms',u.rooms,{step:1,min:1})}
+        ${ni(`ucx-${u.id}`,'Total CAPEX',u.capex,{pre:'$',step:5000})}
+      </div>
+
+      <div class="lsec">
+        <div class="lsec-title">Monthly Operating Costs</div>
+        <div class="g4">
+          ${ni(`urt-${u.id}`,'Rent',u.rent,{pre:'$',step:100})}
+          ${ni(`uco-${u.id}`,'COGS / Supplies',u.mCogs,{pre:'$',step:100})}
+          ${ni(`ula-${u.id}`,'Labor',u.mLabor,{pre:'$',step:100})}
+          ${ni(`umk-${u.id}`,'Local Marketing',u.mMktg,{pre:'$',step:100})}
+          ${ni(`umi-${u.id}`,'Misc / Admin',u.mMisc,{pre:'$',step:100})}
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:#94a3b8">
+          Total fixed costs/mo: <strong style="color:#334155">${$(( u.rent+u.mCogs+u.mLabor+u.mMktg+u.mMisc))}</strong>
+          &nbsp;·&nbsp; Annual: <strong style="color:#334155">${$((u.rent+u.mCogs+u.mLabor+u.mMktg+u.mMisc)*12)}</strong>
+        </div>
+      </div>
+
+      <div class="lsec" style="margin-top:10px;border-color:#e9d5ff;background:#faf5ff">
+        <div class="lsec-title" style="color:#7c3aed">Erik Fees</div>
+        <div class="g4">
+          ${ni(`udf-${u.id}`,'Dev Fee (CAPEX)',u.devFee,{pre:'$',step:1000})}
+          ${ni(`urs-${u.id}`,'Rev Share',u.revShare,{suf:'%',step:0.5})}
+          <div></div><div></div>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:#94a3b8">
+          Dev Fee is added to Total CAPEX &nbsp;·&nbsp; Rev Share is applied to Pre-Erik EBITDA and appears in Operating Costs
+        </div>
+      </div>
+    </div>`).join('');
+
+  return`<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:0">Your Locations</div>
+      <button class="btn" onclick="addUnit()">+ Add Location</button>
+    </div>${uHTML}</div>`;
+}
+
+// ─── Tab: Setup ────────────────────────────────────────────────────────────
+function rSetup(){
+  const r=S.rev,c=S.costs;
+  const sample=cu({id:0,rooms:2,capex:150000,rent:6500,om:1,oy:2026,
+    mCogs:2500,mLabor:9250,mMktg:1500,mMisc:1500,devFee:35000,revShare:10});
+  return`
+    <div class="card">
+      <div class="card-title">Revenue Assumptions</div>
+      <div class="g4">
+        ${ni('r-s','Sessions / Room / Day',r.sessions,{step:.5})}
+        ${ni('r-p','Avg Price / Session',r.price,{pre:'$',step:5})}
+        ${ni('r-u','Utilization Rate',r.util,{suf:'%',step:1})}
+        ${ni('r-a','Add-On Revenue',r.addon,{suf:'%',step:.5})}
+      </div>
+      <div class="hint">
+        Session revenue = rooms × sessions/day × price × utilization × 365
+        &nbsp;·&nbsp; Add-on = food, beverage, merch (% of session rev)
+        &nbsp;·&nbsp; Implied 2-room annual revenue: <strong style="color:${CY}">${$(sample.rev)}</strong>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Franchise Fees <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#94a3b8">(% of revenue — applied per location)</span></div>
+      <div class="g4">
+        ${ni('c-r','Royalties',c.royalty,{suf:'%',step:.5})}
+        ${ni('c-b','Brand Development',c.branddev,{suf:'%',step:.5})}
+        <div></div><div></div>
+      </div>
+    </div>`;
+}
+
+// ─── Tab: Unit P&L ─────────────────────────────────────────────────────────
+function rUnits(){
+  const all=S.units.map(u=>({...u,c:cu(u)}));
+  const sel=all.find(u=>u.id===S.sel)||all[0];
+  const c=sel.c,r=S.rev,cs=S.costs;
+
+  const cards=all.map(u=>`
+    <div class="usc" onclick="setSel(${u.id})"
+      style="${u.id===S.sel?'background:#eff6ff;border-color:#bae6fd':'background:#fff'}">
+      <div style="font-weight:700;color:${u.id===S.sel?CY:'#334155'};font-size:14px">${esc(u.name)}</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:2px">${u.rooms}rm · ${MONTHS[u.om-1].slice(0,3)} ${u.oy} · ${$(u.rent)}/mo rent</div>
+      <div style="font-size:12px;font-weight:600;margin-top:5px;color:${u.c.ebitda>0?CY:PK}">
+        EBITDA ${$(u.c.ebitda)} (${P(u.c.margin)}) · Payback ${u.c.payback<50?u.c.payback.toFixed(1)+'y':'—'}
+      </div>
+    </div>`).join('');
+
+  const mets=[
+    {l:'Annual Revenue',          v:$(c.rev),                                        a:CY},
+    {l:'Total CAPEX',             v:$(c.tCapex),                                     a:'#94a3b8'},
+    {l:'Y1 Cash on Cash Return',  v:P(c.coc),                                        a:c.coc>20?GR:AM},
+    {l:'Full Payback (in yrs)',   v:c.payback<50?c.payback.toFixed(1)+' yrs':'N/A', a:'#94a3b8'},
+    {l:'Pre-Erik EBITDA',         v:`${$(c.ebPre)} (${P(c.ebPre/c.rev*100)})`,      a:AM},
+    {l:'EBITDA (Net)',            v:`${$(c.ebitda)} (${P(c.margin)})`,               a:c.ebitda>0?CY:PK},
+  ].map(m=>mc(m.l,m.v,m.a)).join('');
+
+  const cRows=[
+    ['COGS / Supplies',   c.cogs,  `${$(sel.mCogs)}/mo fixed`],
+    ['Labor',             c.labor, `${$(sel.mLabor)}/mo fixed`],
+    ['Rent',              c.rent,  `${$(sel.rent)}/mo`],
+    ['Local Marketing',   c.mktg,  `${$(sel.mMktg)}/mo fixed`],
+    ['Misc / Admin',      c.misc,  `${$(sel.mMisc)}/mo fixed`],
+    ['Royalties',         c.royal, P(cs.royalty)+' of rev'],
+    ['Brand Development', c.bd,    P(cs.branddev)+' of rev'],
+  ].map(([l,v,n])=>pr(
+    `${l} <span style="font-size:10px;color:#cbd5e1">${n}</span>`,
+    `(${$(v)})`,'#64748b',false,true)).join('');
+
+  // 5-year projection for selected unit
+  let cum5=0;
+  const fy5rows=RAMP.map((ramp,i)=>{
+    const yr=sel.oy+i;
+    const rc=cu(sel,ramp);
+    cum5+=rc.ebitda;
+    const paidBack=cum5>=c.tCapex;
+    const justPaid=paidBack&&(cum5-rc.ebitda)<c.tCapex;
+    return`<tr style="background:${justPaid?'#f0fdf4':i%2===0?'#fff':'#fafbfc'};${justPaid?'font-weight:600':''}">
+      <td style="color:#334155">Year ${i+1} <span style="font-size:11px;color:#94a3b8;font-weight:400">(${yr})</span>
+        ${justPaid?`<span style="font-size:10px;font-weight:700;color:${GR};margin-left:6px">✓ Paid back</span>`:''}
+      </td>
+      <td style="color:#94a3b8">${ramp*100}%</td>
+      <td style="color:${CY}">${$(rc.rev)}</td>
+      <td style="color:${AM}">${$(rc.ebPre)}</td>
+      <td style="color:${PU}">(${$(rc.erikRS)})</td>
+      <td style="color:${rc.ebitda>0?CY:PK};font-weight:600">${$(rc.ebitda)}</td>
+      <td>${P(rc.margin)}</td>
+      <td style="color:${cum5>=c.tCapex?GR:'#334155'};font-weight:600">${$(cum5)}</td>
+    </tr>`;
+  }).join('');
+
+  return`<div class="g2">
+    <div>
+      <div class="card"><div class="card-title">Select Location</div>${cards}</div>
+    </div>
+    <div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">${mets}</div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div class="card-title" style="margin-bottom:0">5-Year P&L — ${esc(sel.name)}</div>
+          <div style="font-size:11px;color:#94a3b8">Total CAPEX: <strong style="color:#334155">${$(c.tCapex)}</strong></div>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr>${['Year','Ramp','Revenue','Pre-Erik EBITDA','Erik Rev Share','EBITDA','Margin','Cumulative EBITDA'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+            <tbody>${fy5rows}</tbody>
+          </table>
+        </div>
+        <div style="margin-top:12px;padding:10px 14px;background:${c.payback<5?'#f0fdf4':'#f8fafc'};border:1px solid ${c.payback<5?'#bbf7d0':'#e2e8f0'};border-radius:8px;font-size:12px;color:${c.payback<5?'#15803d':'#64748b'}">
+          <strong>CAPEX Payback:</strong> ${c.payback<50?c.payback.toFixed(1)+' yrs':'N/A'} &nbsp;·&nbsp;
+          <strong>Y1 Cash-on-Cash:</strong> ${P(c.coc)} &nbsp;·&nbsp;
+          <strong>Steady-State EBITDA:</strong> ${$(cu(sel,1).ebitda)}/yr
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─── Tab: Portfolio ─────────────────────────────────────────────────────────
+function rPort(){
+  const P2=port();
+  const tRooms=S.units.reduce((s,u)=>s+u.rooms,0);
+  const mets=[
+    {l:'Total Revenue',     v:$(P2.tRev),                                      a:CY},
+    {l:'Total EBITDA',      v:$(P2.tEB),   s:P(P2.blend)+' margin',            a:CY},
+    {l:'Return on CAPEX',   v:P(P2.coc),                                       a:P2.coc>20?GR:AM},
+    {l:'Total CAPEX',       v:$(P2.tCX),                                       a:'#94a3b8'},
+    {l:'Portfolio Payback', v:P2.payback<50?P2.payback.toFixed(1)+' yrs':'N/A',a:'#94a3b8'},
+    {l:'Locations',         v:S.units.length+' sites',s:tRooms+' total rooms', a:PK},
+  ].map(m=>mc(m.l,m.v,m.a,m.s||'')).join('');
+
+  const rows=P2.res.map((u,i)=>`
+    <tr style="background:${i%2===0?'#fff':'#fafbfc'}">
+      <td style="font-weight:700;color:#334155">${esc(u.name)}</td>
+      <td>${u.rooms}</td>
+      <td>${MONTHS[u.om-1].slice(0,3)} ${u.oy}</td>
+      <td style="color:${CY};font-weight:600">${$(u.c.rev)}</td>
+      <td style="color:${AM}">${$(u.c.ebPre)}</td>
+      <td style="color:${PU}">(${$(u.c.erikRS)})</td>
+      <td style="color:${u.c.ebitda>0?CY:PK};font-weight:600">${$(u.c.ebitda)}</td>
+      <td>${P(u.c.margin)}</td>
+      <td>${$(u.c.tCapex)}</td>
+      <td style="color:${u.c.coc>20?GR:AM}">${P(u.c.coc)}</td>
+      <td>${u.c.payback<50?u.c.payback.toFixed(1)+'y':'—'}</td>
+    </tr>`).join('');
+
+  return`
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">${mets}</div>
+    <div class="card">
+      <div class="card-title">Location Comparison</div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>${['Location','Rooms','Opens','Revenue','Pre-Erik EBITDA','Erik Rev Share','EBITDA','Margin','Total CAPEX','Return','Payback'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+          <tbody>
+            ${rows}
+            <tr style="background:#eff6ff;border-top:2px solid #bae6fd;font-weight:700">
+              <td colspan="3">TOTAL / BLENDED</td>
+              <td style="color:${CY}">${$(P2.tRev)}</td>
+              <td style="color:${AM}">${$(P2.res.reduce((s,r)=>s+r.c.ebPre,0))}</td>
+              <td style="color:${PU}">(${$(P2.res.reduce((s,r)=>s+r.c.erikRS,0))})</td>
+              <td style="color:${CY}">${$(P2.tEB)}</td>
+              <td>${P(P2.blend)}</td>
+              <td>${$(P2.tCX)}</td>
+              <td style="color:${P2.coc>20?GR:AM}">${P(P2.coc)}</td>
+              <td>${P2.payback<50?P2.payback.toFixed(1)+'y':'—'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ─── Tab: 5-Year ────────────────────────────────────────────────────────────
+function rFY(){
+  const data=fy5();
+  let cum=0;
+  const rows=data.map((row,i)=>{
+    cum+=row.eb;
+    return`<tr style="background:${i%2===0?'#fff':'#fafbfc'}">
+      <td style="font-weight:700;color:#334155">Year ${i+1} <span style="font-size:11px;color:#94a3b8;font-weight:400">(${row.yr})</span></td>
+      <td style="color:${CY};font-weight:600">${$(row.rev)}</td>
+      <td style="color:${row.eb>0?CY:PK};font-weight:600">${$(row.eb)}</td>
+      <td>${P(row.margin)}</td>
+      <td style="color:#94a3b8">${RAMP[Math.min(i,4)]*100}%</td>
+      <td style="color:${GR};font-weight:600">${$(cum)}</td>
+    </tr>`;
+  }).join('');
+
+  const P2=port();
+  return`
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+        <div class="card-title" style="margin-bottom:0">5-Year Portfolio Projection</div>
+        <div style="font-size:11px;color:#94a3b8;text-align:right">
+          Revenue ramp: Y1 50% → Y2 70% → Y3 88% → Y4+ 100% of steady-state<br>
+          Locations opening in future years contribute from their open year
+        </div>
+      </div>
+      <table>
+        <thead><tr>${['Year','Revenue','EBITDA','Margin','Ramp','Cumulative EBITDA'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="margin-top:14px;padding:12px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;color:#15803d">
+        <strong>Total CAPEX Invested:</strong> ${$(P2.tCX)} &nbsp;·&nbsp;
+        <strong>Cumulative EBITDA by Year 5:</strong> ${$(data.reduce((s,r)=>s+r.eb,0))} &nbsp;·&nbsp;
+        <strong>Implied Payback:</strong> ${P2.payback<50?P2.payback.toFixed(1)+' yrs':'N/A'}
+      </div>
+    </div>`;
+}
+
+// ─── Tab: Sale ──────────────────────────────────────────────────────────────
+function rSale(){
+  const P2=port();
+  const em=S.sale.em, rm=S.sale.rm;
+  const eSale=P2.tEB*em, rSale=P2.tRev*rm;
+  const eGain=eSale-P2.tCX, rGain=rSale-P2.tCX;
+  const eRet=P2.tCX>0?eSale/P2.tCX:0, rRet=P2.tCX>0?rSale/P2.tCX:0;
+
+  // Sensitivity
+  const emults=[2,3,4,5,6,7,8];
+  const rmults=[0.5,1.0,1.5,2.0,2.5,3.0];
+  const eRows=emults.map((m,i)=>`
+    <tr style="background:${m===em?'#eff6ff':i%2===0?'#fff':'#fafbfc'};${m===em?'font-weight:700':''}">
+      <td style="color:${CY}">${m}×</td>
+      <td style="color:${CY}">${$m(P2.tEB*m)}</td>
+      <td style="color:${P2.tEB*m-P2.tCX>0?GR:PK}">${$m(P2.tEB*m-P2.tCX)}</td>
+      <td style="color:${P2.tCX>0&&P2.tEB*m/P2.tCX>2?GR:AM}">${P2.tCX>0?(P2.tEB*m/P2.tCX).toFixed(2)+'×':'—'}</td>
+    </tr>`).join('');
+  const rRows=rmults.map((m,i)=>`
+    <tr style="background:${m===rm?'#eff6ff':i%2===0?'#fff':'#fafbfc'};${m===rm?'font-weight:700':''}">
+      <td style="color:${AM}">${m}×</td>
+      <td style="color:${AM}">${$m(P2.tRev*m)}</td>
+      <td style="color:${P2.tRev*m-P2.tCX>0?GR:PK}">${$m(P2.tRev*m-P2.tCX)}</td>
+      <td style="color:${P2.tCX>0&&P2.tRev*m/P2.tCX>2?GR:AM}">${P2.tCX>0?(P2.tRev*m/P2.tCX).toFixed(2)+'×':'—'}</td>
+    </tr>`).join('');
+
+  return`
+    <div class="card" style="border-top:3px solid #0284c7">
+      <div class="card-title">Current Portfolio Metrics</div>
+      <div class="g3">
+        ${mc('System Revenue',$(P2.tRev),CY)}
+        ${mc('System EBITDA',`${$(P2.tEB)} (${P(P2.blend)})`,CY)}
+        ${mc('Total CAPEX Invested',$(P2.tCX),'#94a3b8')}
+      </div>
+    </div>
+
+    <div class="g2">
+      <div class="card" style="border-top:3px solid ${CY}">
+        <div class="card-title" style="color:${CY}">EBITDA-Based Valuation</div>
+        ${ni('sale-em','EBITDA Multiple',em,{suf:'×',step:.5,min:.5})}
+        <div style="margin-top:16px">
+          ${pr('System EBITDA',$(P2.tEB),'#334155')}
+          ${pr(`× Multiple`,em+'×','#334155')}
+          <div style="border-top:2px solid #e2e8f0;margin:6px 0"></div>
+          ${pr('Implied Sale Price',$(eSale),CY,true,false,15)}
+          ${pr('Return Multiple',eRet.toFixed(2)+'×',eRet>2?GR:AM,true)}
+        </div>
+      </div>
+      <div class="card" style="border-top:3px solid ${AM}">
+        <div class="card-title" style="color:${AM}">Revenue-Based Valuation</div>
+        ${ni('sale-rm','Revenue Multiple',rm,{suf:'×',step:.25,min:.25})}
+        <div style="margin-top:16px">
+          ${pr('System Revenue',$(P2.tRev),'#334155')}
+          ${pr('× Multiple',rm+'×','#334155')}
+          <div style="border-top:2px solid #e2e8f0;margin:6px 0"></div>
+          ${pr('Implied Sale Price',$(rSale),AM,true,false,15)}
+          ${pr('Return Multiple',rRet.toFixed(2)+'×',rRet>2?GR:AM,true)}
+        </div>
+      </div>
+    </div>
+
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">EBITDA Multiple Sensitivity</div>
+        <table>
+          <thead><tr><th>Multiple</th><th>Sale Price</th><th>Net Gain</th><th>Return</th></tr></thead>
+          <tbody>${eRows}</tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title">Revenue Multiple Sensitivity</div>
+        <table>
+          <thead><tr><th>Multiple</th><th>Sale Price</th><th>Net Gain</th><th>Return</th></tr></thead>
+          <tbody>${rRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ─── Render ─────────────────────────────────────────────────────────────────
+function render(){
+  const fid=document.activeElement?document.activeElement.id:null;
+  const P2=port();
+  const tRooms=S.units.reduce((s,u)=>s+u.rooms,0);
+  const TABS=[
+    {id:'locations',label:'📍 Locations'},
+    {id:'setup',    label:'⚙ Setup'},
+    {id:'units',    label:'📊 Unit P&L'},
+    {id:'portfolio',label:'🏢 Portfolio'},
+    {id:'forecast', label:'📈 5-Year'},
+    {id:'sale',     label:'💰 Sale'},
+  ];
+  let body='';
+  if(S.tab==='locations') body=rLoc();
+  if(S.tab==='setup')     body=rSetup();
+  if(S.tab==='units')     body=rUnits();
+  if(S.tab==='portfolio') body=rPort();
+  if(S.tab==='forecast')  body=rFY();
+  if(S.tab==='sale')      body=rSale();
+
+  document.getElementById('app').innerHTML=`
+    <div style="background:#fff;border-bottom:1px solid #e2e8f0;padding:12px 24px;display:flex;align-items:center;gap:20px;box-shadow:0 1px 3px rgba(0,0,0,.04)">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#334155">Franchisee Proforma</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:1px">${S.units.length} locations · ${tRooms} rooms · CAPEX ${$(P2.tCX)}</div>
+      </div>
+      <div style="display:flex;gap:24px;margin-left:16px">
+        <div style="text-align:center">
+          <div style="font-size:15px;font-weight:700;color:${CY}">${$(P2.tRev)}</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:1px">REVENUE/YR</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:15px;font-weight:700;color:${P2.tEB>0?CY:PK}">${$(P2.tEB)}</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:1px">EBITDA/YR</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:15px;font-weight:700;color:${P2.coc>20?GR:AM}">${P(P2.coc)}</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:1px">RETURN ON CAPEX</div>
+        </div>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px">
+        ${(()=>{
+          const connected=!!getToken();
+          const map={idle:{bg:'#f1f5f9',c:'#64748b',t:'🔗 Connect GitHub'},loading:{bg:'#eff6ff',c:'#0284c7',t:'⟳ Loading…'},saving:{bg:'#eff6ff',c:'#0284c7',t:'⟳ Saving…'},saved:{bg:'#f0fdf4',c:'#16a34a',t:'✓ Synced'},error:{bg:'#fff1f2',c:'#e11d48',t:'⚠ Sync Error'}};
+          const s=map[syncStatus]||map.idle;
+          return`<button onclick="showTokenModal()" style="background:${s.bg};color:${s.c};border:none;border-radius:20px;padding:5px 13px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.3px">${s.t}</button>`;
+        })()}
+        ${LOGO}
+      </div>
+    </div>
+    <div class="tab-bar">${TABS.map(t=>`<button class="tab-btn ${S.tab===t.id?'active':''}" onclick="setTab('${t.id}')">${t.label}</button>`).join('')}</div>
+    <div class="content">${body}</div>`;
+
+  if(fid){const el=document.getElementById(fid);if(el)el.focus();}
+}
+
+// ─── Input Handler ──────────────────────────────────────────────────────────
+function inp(id,val){
+  const n=parseFloat(val);
+  const rm={'r-s':'sessions','r-p':'price','r-u':'util','r-a':'addon'};
+  const cm={'c-r':'royalty','c-b':'branddev'};
+  if(rm[id])      {S.rev[rm[id]]=isNaN(n)?0:n;}
+  else if(cm[id]) {S.costs[cm[id]]=isNaN(n)?0:n;}
+  else if(id==='sale-em'){S.sale.em=isNaN(n)?1:n;}
+  else if(id==='sale-rm'){S.sale.rm=isNaN(n)?1:n;}
+  else{
+    const m=id.match(/^u([a-z]+)-(\d+)$/);
+    if(m){
+      const uid=parseInt(m[2]),f=m[1];
+      S.units=S.units.map(u=>{
+        if(u.id!==uid)return u;
+        const map={n:'name',om:'om',oy:'oy',r:'rooms',cx:'capex',rt:'rent',
+                   co:'mCogs',la:'mLabor',mk:'mMktg',mi:'mMisc',df:'devFee',rs:'revShare'};
+        if(!map[f])return u;
+        const key=map[f];
+        if(key==='name')return{...u,[key]:String(val)};
+        const parsed=key==='rooms'?Math.max(1,parseInt(val)||1):(isNaN(n)?0:n);
+        return{...u,[key]:parsed};
+      });
+    }
+  }
+  render();ghSave();
+}
+
+function setTab(t){S.tab=t;render();}
+function setSel(id){S.sel=id;render();}
+function addUnit(){
+  const id=nid++;
+  S.units.push({id,name:`Location ${id}`,om:1,oy:2027,rooms:2,capex:150000,rent:7000,
+    mCogs:2500,mLabor:9250,mMktg:1500,mMisc:1500,devFee:35000,revShare:10});
+  render();ghSave();
+}
+function delUnit(id){
+  S.units=S.units.filter(u=>u.id!==id);
+  if(S.sel===id&&S.units.length)S.sel=S.units[0].id;
+  render();ghSave();
+}
+
+// On startup: try GitHub first, fall back to localStorage
+render();
+ghLoad();
+</script>
+</body>
+</html>
