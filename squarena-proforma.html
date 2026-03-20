@@ -55,6 +55,9 @@ const MONTHS=['January','February','March','April','May','June','July','August',
 const CX_ROWS=['Arch & Engineering','Permitting Fees','General Contracting','Squarena Tiles','Brand Finishes','Exterior Signage','Opening Inventory','Grand Opening Marketing'];
 // DEFCAPEX[rowIdx][colIdx] where colIdx 0=2rooms … 4=6rooms
 const DEFCAPEX=[[12000,14000,17000,20000,23000],[3500,4000,5000,6000,7000],[48000,58000,70000,82000,95000],[50000,75000,100000,125000,150000],[15000,18000,21000,24000,27000],[5000,5500,6000,6500,7000],[8000,9000,10000,11000,12000],[5000,6000,7000,8000,9000]];
+const OX_ROWS=['Rent','Supplies','Labor','Marketing','Misc'];
+// DEFOPEX[rowIdx][colIdx] monthly costs — maps to rent,mCogs,mLabor,mMktg,mMisc
+const DEFOPEX=[[6500,8500,10500,12500,14500],[2500,3000,3500,4000,4500],[9250,11000,13000,15000,17000],[1500,2000,2500,3000,3500],[1500,2000,2500,3000,3500]];
 
 // ─── State ─────────────────────────────────────────────────────────────────
 const DEFCOMP=Array.from({length:20},()=>({devFee:35000,revShare:10,equity:0}));
@@ -65,6 +68,7 @@ const DEFAULTS={
   sale:{em:4,rm:1.5},
   ramp:[.50,.70,.88,1.00,1.00],
   capexMatrix:DEFCAPEX.map(r=>[...r]),
+  opexMatrix:DEFOPEX.map(r=>[...r]),
   comp:DEFCOMP.map(c=>({...c})),
   distributions:[0,0,0,0,0],
   units:[
@@ -77,6 +81,7 @@ function migrateState(s){
   if(!s.distributions)s.distributions=[0,0,0,0,0];
   if(!s.ramp)s.ramp=[.50,.70,.88,1.00,1.00];
   if(!s.capexMatrix)s.capexMatrix=DEFCAPEX.map(r=>[...r]);
+  if(!s.opexMatrix)s.opexMatrix=DEFOPEX.map(r=>[...r]);
   while(s.comp.length<20)s.comp.push({devFee:35000,revShare:10,equity:0});
   return s;
 }
@@ -84,6 +89,11 @@ function capexForRooms(rooms){
   const mx=S.capexMatrix||DEFCAPEX;
   const col=Math.max(0,Math.min(4,rooms-2));
   return mx.reduce((s,row)=>s+(row[col]||0),0);
+}
+function opexForRooms(rooms){
+  const mx=S.opexMatrix||DEFOPEX;
+  const col=Math.max(0,Math.min(4,rooms-2));
+  return{rent:mx[0][col],mCogs:mx[1][col],mLabor:mx[2][col],mMktg:mx[3][col],mMisc:mx[4][col]};
 }
 let nid=3;
 let S={...DEFAULTS,comp:DEFAULTS.comp.map(c=>({...c}))};
@@ -226,9 +236,11 @@ const LOGO=`<img src="logo.png" style="height:40px;display:block;object-fit:cont
 // ─── Tab: Locations ────────────────────────────────────────────────────────
 function rLoc(){
   const yrs=[2024,2025,2026,2027,2028,2029,2030];
+  const ro=s=>`<div style="padding:7px 10px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;color:#334155;font-weight:600">${s}</div>`;
   const uHTML=S.units.map((u,i)=>{
     const comp=(S.comp&&S.comp[i])||{devFee:35000,revShare:10,equity:0};
     const sn=String(i+1).padStart(2,'0');
+    const totalOpex=u.rent+u.mCogs+u.mLabor+u.mMktg+u.mMisc;
     return`
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -241,7 +253,7 @@ function rLoc(){
         ${S.units.length>1?`<button class="btn-del" onclick="delUnit(${u.id})">Remove</button>`:''}
       </div>
 
-      <div class="g4" style="margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
         <div>
           <label class="label">Open Month</label>
           <select id="uom-${u.id}" oninput="inp('uom-${u.id}',this.value)">
@@ -255,45 +267,28 @@ function rLoc(){
           </select>
         </div>
         ${ni(`ur-${u.id}`,'Rooms',u.rooms,{step:1,min:1,max:6})}
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
         <div>
           <label class="label">Total CAPEX <span style="font-weight:400;color:#94a3b8">(from calculator)</span></label>
-          <div style="padding:7px 10px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;color:#334155;font-weight:600">${$(u.capex)}</div>
+          ${ro($(u.capex))}
+        </div>
+        <div>
+          <label class="label">Total Monthly OPEX <span style="font-weight:400;color:#94a3b8">(from calculator · ${$(totalOpex*12)}/yr)</span></label>
+          ${ro($(totalOpex)+'/mo')}
         </div>
       </div>
 
-      <div class="lsec">
-        <div class="lsec-title">Monthly Operating Costs</div>
-        <div class="g4">
-          ${ni(`urt-${u.id}`,'Rent',u.rent,{pre:'$',step:100})}
-          ${ni(`uco-${u.id}`,'COGS / Supplies',u.mCogs,{pre:'$',step:100})}
-          ${ni(`ula-${u.id}`,'Labor',u.mLabor,{pre:'$',step:100})}
-          ${ni(`umk-${u.id}`,'Local Marketing',u.mMktg,{pre:'$',step:100})}
-          ${ni(`umi-${u.id}`,'Misc / Admin',u.mMisc,{pre:'$',step:100})}
-        </div>
-        <div style="margin-top:10px;font-size:11px;color:#94a3b8">
-          Total fixed costs/mo: <strong style="color:#334155">${$(u.rent+u.mCogs+u.mLabor+u.mMktg+u.mMisc)}</strong>
-          &nbsp;·&nbsp; Annual: <strong style="color:#334155">${$((u.rent+u.mCogs+u.mLabor+u.mMktg+u.mMisc)*12)}</strong>
-        </div>
-      </div>
-
-      <div class="lsec" style="margin-top:10px;border-color:#e9d5ff;background:#faf5ff">
+      <div class="lsec" style="border-color:#e9d5ff;background:#faf5ff">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <div class="lsec-title" style="color:#7c3aed;margin-bottom:0">Erik Fees</div>
-          <span style="font-size:10px;color:#94a3b8">Edit in Erik Comp Model tab</span>
+          <span style="font-size:10px;color:#94a3b8">Edit in Erik Comp tab</span>
         </div>
         <div class="g3">
-          <div>
-            <div class="label">Dev Fee (CAPEX)</div>
-            <div style="padding:7px 9px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;color:#334155;font-weight:600">${$(comp.devFee)}</div>
-          </div>
-          <div>
-            <div class="label">Rev Share</div>
-            <div style="padding:7px 9px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;color:#334155;font-weight:600">${comp.revShare}%</div>
-          </div>
-          <div>
-            <div class="label">Equity</div>
-            <div style="padding:7px 9px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;color:#334155;font-weight:600">${comp.equity}%</div>
-          </div>
+          <div><div class="label">Dev Fee (CAPEX)</div>${ro($(comp.devFee))}</div>
+          <div><div class="label">Rev Share</div>${ro(comp.revShare+'%')}</div>
+          <div><div class="label">Equity</div>${ro(comp.equity+'%')}</div>
         </div>
       </div>
     </div>`;
@@ -360,6 +355,37 @@ function rSetup(){
               <td style="color:#0284c7">Total CAPEX</td>
               ${[0,1,2,3,4].map(ci=>`
                 <td style="color:${CY}">${$((S.capexMatrix||DEFCAPEX).reduce((s,r)=>s+r[ci],0))}</td>`).join('')}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">OPEX Calculator Assumptions <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#94a3b8">(monthly costs — auto-fills when a location's room count is set)</span></div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th style="text-align:left;min-width:130px">Cost Item</th>
+            ${[2,3,4,5,6].map(r=>`<th>${r} Rooms</th>`).join('')}
+          </tr></thead>
+          <tbody>
+            ${OX_ROWS.map((label,ri)=>`
+              <tr style="background:${ri%2===0?'#fff':'#fafbfc'}">
+                <td style="color:#334155;font-weight:500">${label}</td>
+                ${[0,1,2,3,4].map(ci=>`
+                  <td><div class="iw"><span class="pre">$</span>
+                    <input type="text" inputmode="decimal" id="oxm-${ri}-${ci}"
+                      value="${fmtN((S.opexMatrix||DEFOPEX)[ri][ci])}"
+                      class="hp"
+                      onfocus="niFocus(this)" onblur="niBlur(this)"
+                      onchange="inp('oxm-${ri}-${ci}',this.value.replace(/,/g,''))"
+                      style="width:100px">
+                  </div></td>`).join('')}
+              </tr>`).join('')}
+            <tr style="background:#f0fdf4;font-weight:700;border-top:2px solid #bbf7d0">
+              <td style="color:${GR}">Total / Mo</td>
+              ${[0,1,2,3,4].map(ci=>`
+                <td style="color:${GR}">${$((S.opexMatrix||DEFOPEX).reduce((s,r)=>s+r[ci],0))}</td>`).join('')}
             </tr>
           </tbody>
         </table>
@@ -675,6 +701,7 @@ function rSale(){
   // Compute ending cash position (Year 5 cumulative)
   const minY=S.units.length?Math.min(...S.units.map(u=>u.oy)):new Date().getFullYear();
   const dist=S.distributions||[0,0,0,0,0];
+  const totalDist=dist.reduce((s,d)=>s+(d||0),0);
   let cfCum=0;
   for(let i=0;i<5;i++){
     const yr=minY+i;
@@ -730,6 +757,7 @@ function rSale(){
           <div style="border-top:2px solid #e2e8f0;margin:6px 0"></div>
           ${pr('Implied Sale Price',$(eSale),CY,true,false,15)}
           ${pr('Return Multiple',eRet.toFixed(2)+'×',eRet>2?GR:AM,true)}
+          ${pr('Total Cash Distributed',$(totalDist),'#64748b',false)}
           ${pr('Ending Cash Position',$(cfCum),cfCum>=0?GR:PK,false)}
         </div>
       </div>
@@ -742,6 +770,7 @@ function rSale(){
           <div style="border-top:2px solid #e2e8f0;margin:6px 0"></div>
           ${pr('Implied Sale Price',$(rSale),AM,true,false,15)}
           ${pr('Return Multiple',rRet.toFixed(2)+'×',rRet>2?GR:AM,true)}
+          ${pr('Total Cash Distributed',$(totalDist),'#64748b',false)}
           ${pr('Ending Cash Position',$(cfCum),cfCum>=0?GR:PK,false)}
         </div>
       </div>
@@ -831,10 +860,16 @@ function inp(id,val){
       if(!S.capexMatrix)S.capexMatrix=DEFCAPEX.map(r=>[...r]);
       const ri=parseInt(cxm[1]),ci=parseInt(cxm[2]);
       S.capexMatrix[ri][ci]=isNaN(n)?0:n;
-      // auto-update any units whose room count maps to this column
       const rooms=ci+2;
-      const newCapex=capexForRooms(rooms);
-      S.units=S.units.map(u=>u.rooms===rooms?{...u,capex:newCapex}:u);
+      S.units=S.units.map(u=>u.rooms===rooms?{...u,capex:capexForRooms(rooms)}:u);
+    }
+    const oxm=id.match(/^oxm-(\d+)-(\d+)$/);
+    if(oxm){
+      if(!S.opexMatrix)S.opexMatrix=DEFOPEX.map(r=>[...r]);
+      const ri=parseInt(oxm[1]),ci=parseInt(oxm[2]);
+      S.opexMatrix[ri][ci]=isNaN(n)?0:n;
+      const rooms=ci+2;
+      S.units=S.units.map(u=>u.rooms===rooms?{...u,...opexForRooms(rooms)}:u);
     }
     // comp fields: comp-df-{i}, comp-rs-{i}, comp-eq-{i}
     const cm2=id.match(/^comp-(df|rs|eq)-(\d+)$/);
@@ -862,7 +897,7 @@ function inp(id,val){
         if(key==='name')return{...u,[key]:String(val)};
         if(key==='rooms'){
           const newRooms=Math.max(1,Math.min(6,parseInt(val)||1));
-          return{...u,rooms:newRooms,capex:capexForRooms(newRooms)};
+          return{...u,rooms:newRooms,capex:capexForRooms(newRooms),...opexForRooms(newRooms)};
         }
         return{...u,[key]:isNaN(n)?0:n};
       });
@@ -875,8 +910,8 @@ function setTab(t){S.tab=t;render();}
 function setSel(id){S.sel=id;render();}
 function addUnit(){
   const id=nid++;
-  S.units.push({id,name:`Location ${id}`,om:1,oy:2027,rooms:2,capex:capexForRooms(2),rent:7000,
-    mCogs:2500,mLabor:9250,mMktg:1500,mMisc:1500,devFee:35000,revShare:10});
+  const defOpex=opexForRooms(2);
+  S.units.push({id,name:`Location ${id}`,om:1,oy:2027,rooms:2,capex:capexForRooms(2),...defOpex,devFee:35000,revShare:10});
   render();ghSave();
 }
 function delUnit(id){
