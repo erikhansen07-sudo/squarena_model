@@ -60,6 +60,7 @@ const DEFAULTS={
   rev:{sessions:5,price:130,util:85,addon:8},
   costs:{royalty:6,branddev:2},
   sale:{em:4,rm:1.5},
+  ramp:[.50,.70,.88,1.00,1.00],
   comp:DEFCOMP.map(c=>({...c})),
   distributions:[0,0,0,0,0],
   units:[
@@ -70,7 +71,7 @@ const DEFAULTS={
 function migrateState(s){
   if(!s.comp){s.comp=Array.from({length:20},(_,i)=>({devFee:s.units[i]?.devFee||35000,revShare:s.units[i]?.revShare||10,equity:0}));}
   if(!s.distributions)s.distributions=[0,0,0,0,0];
-  // ensure comp has 20 slots
+  if(!s.ramp)s.ramp=[.50,.70,.88,1.00,1.00];
   while(s.comp.length<20)s.comp.push({devFee:35000,revShare:10,equity:0});
   return s;
 }
@@ -159,7 +160,7 @@ function fy5(){
     S.units.forEach((u,ui)=>{
       const n=yr-u.oy;
       if(n<0)return;
-      const ramp=RAMP[Math.min(n,4)];
+      const ramp=(S.ramp||RAMP)[Math.min(n,4)];
       const c=cu(u,ramp,ui);
       rev+=c.rev;eb+=c.ebitda;ebPre+=c.ebPre;erikRS+=c.erikRS;
     });
@@ -303,6 +304,18 @@ function rSetup(){
         ${ni('c-b','Brand Development',c.branddev,{suf:'%',step:.5})}
         <div></div><div></div>
       </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Revenue Ramp <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#94a3b8">(% of steady-state revenue by year since open)</span></div>
+      <table style="width:260px">
+        <thead><tr><th>Year Since Open</th><th>Ramp %</th></tr></thead>
+        <tbody>${(S.ramp||RAMP).map((v,i)=>`
+          <tr style="background:${i%2===0?'#fff':'#fafbfc'}">
+            <td style="color:#334155;font-weight:600">Year ${i+1}</td>
+            <td><div class="iw"><input type="number" id="ramp-${i}" value="${+(v*100).toFixed(1)}" step="1" min="1" max="200" class="hp" onchange="inp('ramp-${i}',this.value)" style="width:90px"><span class="suf">%</span></div></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
     </div>`;
 }
 
@@ -346,7 +359,7 @@ function rUnits(){
     `(${$(v)})`,'#64748b',false,true)).join('');
 
   let cum5=0;
-  const fy5rows=RAMP.map((ramp,i)=>{
+  const fy5rows=(S.ramp||RAMP).map((ramp,i)=>{
     const yr=sel.oy+i;
     const rc=cu(sel,ramp,selIdx);
     cum5+=rc.ebitda;
@@ -495,7 +508,7 @@ function rCashFlow(){
     },0);
     S.units.forEach((u,ui)=>{
       const n=yr-u.oy;if(n<0)return;
-      const rc=cu(u,RAMP[Math.min(n,4)],ui);
+      const rc=cu(u,(S.ramp||RAMP)[Math.min(n,4)],ui);
       ebPre+=rc.ebPre;erikRS+=rc.erikRS;
     });
     const netOp=ebPre-erikRS;
@@ -542,7 +555,7 @@ function rFY(){
       <td style="color:${CY};font-weight:600">${$(row.rev)}</td>
       <td style="color:${row.eb>0?CY:PK};font-weight:600">${$(row.eb)}</td>
       <td>${P(row.margin)}</td>
-      <td style="color:#94a3b8">${RAMP[Math.min(i,4)]*100}%</td>
+      <td style="color:#94a3b8">${((S.ramp||RAMP)[Math.min(i,4)]*100).toFixed(0)}%</td>
       <td style="color:${GR};font-weight:600">${$(cum)}</td>
     </tr>`;
   }).join('');
@@ -553,7 +566,7 @@ function rFY(){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
         <div class="card-title" style="margin-bottom:0">5-Year Portfolio Projection</div>
         <div style="font-size:11px;color:#94a3b8;text-align:right">
-          Revenue ramp: Y1 50% → Y2 70% → Y3 88% → Y4+ 100% of steady-state<br>
+          Revenue ramp: ${(S.ramp||RAMP).map((v,i)=>`Y${i+1} ${(v*100).toFixed(0)}%`).join(' → ')} of steady-state<br>
           Locations opening in future years contribute from their open year
         </div>
       </div>
@@ -591,7 +604,7 @@ function rSale(){
     },0);
     S.units.forEach((u,ui)=>{
       const n=yr-u.oy;if(n<0)return;
-      const rc=cu(u,RAMP[Math.min(n,4)],ui);
+      const rc=cu(u,(S.ramp||RAMP)[Math.min(n,4)],ui);
       ebPre+=rc.ebPre;erikRS+=rc.erikRS;
     });
     cfCum+=(ebPre-erikRS)-capexOut-(dist[i]||0);
@@ -740,6 +753,11 @@ function inp(id,val){
   else if(id==='sale-em'){S.sale.em=isNaN(n)?1:n;}
   else if(id==='sale-rm'){S.sale.rm=isNaN(n)?1:n;}
   else{
+    const rampM=id.match(/^ramp-(\d+)$/);
+    if(rampM){
+      if(!S.ramp)S.ramp=[.50,.70,.88,1.00,1.00];
+      S.ramp[parseInt(rampM[1])]=isNaN(n)?0:Math.max(0,n)/100;
+    }
     // comp fields: comp-df-{i}, comp-rs-{i}, comp-eq-{i}
     const cm2=id.match(/^comp-(df|rs|eq)-(\d+)$/);
     if(cm2){
