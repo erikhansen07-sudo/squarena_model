@@ -380,11 +380,23 @@ function rUnits(){
       </div>
     </div>`).join('');
 
+  // Y1 CoC using actual ramp[0], not mature
+  const y1c=cu(sel,(S.ramp||RAMP)[0],selIdx);
+  const y1coc=c.tCapex>0?y1c.ebitda/c.tCapex*100:0;
+  // Actual payback by walking ramp years (mirrors table logic)
+  let cumPB=0,actualPayback=Infinity;
+  for(let pi=0;pi<(S.ramp||RAMP).length;pi++){
+    const prc=cu(sel,(S.ramp||RAMP)[pi],selIdx);
+    const prev=cumPB;
+    cumPB+=prc.ebitda;
+    if(cumPB>=c.tCapex){actualPayback=pi+(c.tCapex-prev)/prc.ebitda;break;}
+  }
+
   const mets=[
     {l:'Annual Revenue',          v:$(c.rev),                                        a:CY},
     {l:'Total CAPEX',             v:$(c.tCapex),                                     a:'#94a3b8'},
-    {l:'Y1 Cash on Cash Return',  v:P(c.coc),                                        a:c.coc>20?GR:AM},
-    {l:'Full Payback (in yrs)',   v:c.payback<50?c.payback.toFixed(1)+' yrs':'N/A', a:'#94a3b8'},
+    {l:'Y1 Cash on Cash Return',  v:P(y1coc),                                        a:y1coc>20?GR:AM},
+    {l:'Full Payback (in yrs)',   v:actualPayback<50?actualPayback.toFixed(1)+' yrs':'N/A', a:'#94a3b8'},
     {l:'Mature Pre-Erik EBITDA',  v:`${$(c.ebPre)} (${P(c.ebPre/c.rev*100)})`,      a:AM},
     {l:'Mature EBITDA (Net)',     v:`${$(c.ebitda)} (${P(c.margin)})`,               a:c.ebitda>0?CY:PK},
   ].map(m=>mc(m.l,m.v,m.a)).join('');
@@ -439,9 +451,9 @@ function rUnits(){
             <tbody>${fy5rows}</tbody>
           </table>
         </div>
-        <div style="margin-top:12px;padding:10px 14px;background:${c.payback<5?'#f0fdf4':'#f8fafc'};border:1px solid ${c.payback<5?'#bbf7d0':'#e2e8f0'};border-radius:8px;font-size:12px;color:${c.payback<5?'#15803d':'#64748b'}">
-          <strong>CAPEX Payback:</strong> ${c.payback<50?c.payback.toFixed(1)+' yrs':'N/A'} &nbsp;·&nbsp;
-          <strong>Y1 Cash-on-Cash:</strong> ${P(c.coc)} &nbsp;·&nbsp;
+        <div style="margin-top:12px;padding:10px 14px;background:${actualPayback<5?'#f0fdf4':'#f8fafc'};border:1px solid ${actualPayback<5?'#bbf7d0':'#e2e8f0'};border-radius:8px;font-size:12px;color:${actualPayback<5?'#15803d':'#64748b'}">
+          <strong>CAPEX Payback:</strong> ${actualPayback<50?actualPayback.toFixed(1)+' yrs':'N/A'} &nbsp;·&nbsp;
+          <strong>Y1 Cash-on-Cash:</strong> ${P(y1coc)} &nbsp;·&nbsp;
           <strong>Steady-State EBITDA:</strong> ${$(cu(sel,1,selIdx).ebitda)}/yr
         </div>
       </div>
@@ -757,20 +769,6 @@ function render(){
       <div>
         <div style="font-size:13px;font-weight:700;color:#334155">Franchisee Proforma</div>
         <div style="font-size:11px;color:#94a3b8;margin-top:1px">${S.units.length} locations · ${tRooms} rooms · CAPEX ${$(P2.tCX)}</div>
-      </div>
-      <div style="display:flex;gap:24px;margin-left:16px">
-        <div style="text-align:center">
-          <div style="font-size:15px;font-weight:700;color:${CY}">${$(P2.tRev)}</div>
-          <div style="font-size:10px;color:#94a3b8;margin-top:1px">REVENUE/YR</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:15px;font-weight:700;color:${P2.tEB>0?CY:PK}">${$(P2.tEB)}</div>
-          <div style="font-size:10px;color:#94a3b8;margin-top:1px">EBITDA/YR</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:15px;font-weight:700;color:${P2.coc>20?GR:AM}">${P(P2.coc)}</div>
-          <div style="font-size:10px;color:#94a3b8;margin-top:1px">RETURN ON CAPEX</div>
-        </div>
       </div>
       <div style="margin-left:auto;display:flex;align-items:center;gap:14px">
         ${(()=>{
