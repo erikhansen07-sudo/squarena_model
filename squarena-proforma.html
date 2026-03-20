@@ -481,7 +481,7 @@ function rUnits(){
     </tr>`;
   }).join('');
 
-  return`<div style="display:grid;grid-template-columns:220px 1fr;gap:14px">
+  return`<div style="display:grid;grid-template-columns:280px 1fr;gap:14px">
     <div>
       <div class="card"><div class="card-title">Select Location</div>${cards}</div>
     </div>
@@ -513,12 +513,9 @@ function rPort(){
   const P2=port();
   const tRooms=S.units.reduce((s,u)=>s+u.rooms,0);
   const mets=[
-    {l:'Total Revenue',     v:$(P2.tRev),                                      a:CY},
-    {l:'Total EBITDA',      v:$(P2.tEB),   s:P(P2.blend)+' margin',            a:CY},
-    {l:'Return on CAPEX',   v:P(P2.coc),                                       a:P2.coc>20?GR:AM},
-    {l:'Total CAPEX',       v:$(P2.tCX),                                       a:'#94a3b8'},
-    {l:'Portfolio Payback', v:P2.payback<50?P2.payback.toFixed(1)+' yrs':'N/A',a:'#94a3b8'},
-    {l:'Locations',         v:S.units.length+' sites',s:tRooms+' total rooms', a:PK},
+    {l:'Total Revenue',  v:$(P2.tRev),                               a:CY},
+    {l:'Total EBITDA',   v:$(P2.tEB), s:P(P2.blend)+' margin',       a:CY},
+    {l:'Sites',          v:S.units.length+' sites', s:tRooms+' total rooms', a:PK},
   ].map(m=>mc(m.l,m.v,m.a,m.s||'')).join('');
 
   const rows=P2.res.map((u,i)=>`
