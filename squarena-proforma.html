@@ -71,14 +71,14 @@ let S=DEFAULTS;
 try{const raw=localStorage.getItem('sq-state');if(raw){S=JSON.parse(raw);nid=Math.max(...S.units.map(u=>u.id))+1;}}catch(e){}
 function save(){try{localStorage.setItem('sq-state',JSON.stringify(S));}catch(e){}}
 
-// ─── JSONblob Sync ────────────────────────────────────────────────────────────
-const BLOB_URL='https://jsonblob.com/api/jsonBlob/019d0882-eea9-7f5a-bce1-f9fcaa3e41bc';
+// ─── Firebase Sync ────────────────────────────────────────────────────────────
+const FB_URL='https://squarena-6d0fb-default-rtdb.firebaseio.com/state.json';
 let syncStatus='idle'; // idle | loading | saving | saved | error
 
 async function ghLoad(){
   syncStatus='loading';render();
   try{
-    const res=await fetch(BLOB_URL);
+    const res=await fetch(FB_URL);
     if(!res.ok)throw new Error(res.status);
     const parsed=await res.json();
     if(parsed&&parsed.units&&parsed.units.length){
@@ -95,7 +95,7 @@ async function ghSave(){
   save();
   syncStatus='saving';render();
   try{
-    const res=await fetch(BLOB_URL,{
+    const res=await fetch(FB_URL,{
       method:'PUT',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(S)
