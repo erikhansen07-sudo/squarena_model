@@ -118,6 +118,8 @@ function annualCurveMult(u,yearIdx){
 // ─── State ─────────────────────────────────────────────────────────────────
 const DEFCOMP=Array.from({length:20},()=>({devFee:35000,revShare:10,equity:0}));
 const DEFEQTIERS=[{t:1,p:3},{t:10,p:6},{t:20,p:10}];
+// devFeeTiers: stores 1–t get this fee; t is the upper bound (last tier = ∞)
+const DEFDFTIERS=[{t:3,f:40000},{t:6,f:35000},{t:10,f:30000},{t:999,f:25000}];
 const DEFAULTS={
   tab:'setup',sel:1,
   rev:{sessions:5,price:130,util:85,addon:8},
@@ -130,6 +132,7 @@ const DEFAULTS={
   distributions:[0,0,0,0,0],
   capexPaybackRate:90,
   equityTiers:DEFEQTIERS.map(t=>({...t})),
+  devFeeTiers:DEFDFTIERS.map(t=>({...t})),
   units:[
     {id:1,name:'Solana Beach',  om:1,oy:2026,rooms:2,capex:150000,rent:6500,mCogs:2500,mLabor:9250,mMktg:1500,mMisc:1500},
     {id:2,name:'Mission Valley',om:1,oy:2027,rooms:3,capex:185000,rent:8500,mCogs:2500,mLabor:9250,mMktg:1500,mMisc:1500},
@@ -143,6 +146,7 @@ function migrateState(s){
   if(!s.opexMatrix)s.opexMatrix=DEFOPEX.map(r=>[...r]);
   if(!s.capexPaybackRate)s.capexPaybackRate=90;
   if(!s.equityTiers)s.equityTiers=DEFEQTIERS.map(t=>({...t}));
+  if(!s.devFeeTiers)s.devFeeTiers=DEFDFTIERS.map(t=>({...t}));
   while(s.comp.length<20)s.comp.push({devFee:35000,revShare:10,equity:0});
   s.units=s.units.map(u=>u.curve?u:{...u,curve:'flat'});
   return s;
@@ -154,6 +158,12 @@ function fleetEquityPct(){
   let pct=0;
   for(const tier of tiers){if(n>=tier.t)pct=tier.p;}
   return pct;
+}
+// storeDevFee: returns dev fee for store at position storeNum (1-based)
+function storeDevFee(storeNum){
+  const tiers=S.devFeeTiers||DEFDFTIERS;
+  for(const tier of tiers){if(storeNum<=tier.t)return tier.f;}
+  return tiers[tiers.length-1].f;
 }
 function capexForRooms(rooms){
   const mx=S.capexMatrix||DEFCAPEX;
@@ -217,6 +227,7 @@ function cu(u,ramp=1,idx=null){
   const r=S.rev,c=S.costs;
   const i=idx!==null?idx:S.units.findIndex(x=>x.id===u.id);
   const comp=(i>=0&&S.comp&&S.comp[i])?S.comp[i]:{devFee:u.devFee||35000,revShare:u.revShare||10,equity:0};
+  const devFee=storeDevFee(i+1); // tier-based dev fee by store position (1-based)
   const sessRev=u.rooms*r.sessions*r.price*(r.util/100)*365*ramp;
   const addonRev=sessRev*r.addon/100;
   const rev=sessRev+addonRev;
@@ -228,7 +239,7 @@ function cu(u,ramp=1,idx=null){
   const opex=opexPre+erikRS;
   const ebitda=rev-opex;
   const margin=rev>0?ebitda/rev*100:0;
-  const tCapex=u.capex+comp.devFee;
+  const tCapex=u.capex+devFee;
   const payback=ebitda>0?tCapex/ebitda:Infinity;
   const coc=tCapex>0?ebitda/tCapex*100:0;
   return{sessRev,addonRev,rev,cogs,labor,rent,mktg,misc,royal,bd,opexPre,ebPre,erikRS,opex,ebitda,margin,tCapex,payback,coc,comp};
@@ -355,10 +366,9 @@ function rLoc(){
           <div class="lsec-title" style="color:#7c3aed;margin-bottom:0">Erik Fees</div>
           <span style="font-size:10px;color:#94a3b8">Edit in Erik Comp tab</span>
         </div>
-        <div class="g3">
-          <div><div class="label">Dev Fee (CAPEX)</div>${ro($(comp.devFee))}</div>
-          <div><div class="label">Rev Share</div>${ro(comp.revShare+'%')}</div>
-          <div><div class="label">Equity</div>${ro(comp.equity+'%')}</div>
+        <div class="g2">
+          <div><div class="label">Dev Fee (CAPEX)</div>${ro($(storeDevFee(i+1)))}</div>
+          <div><div class="label">Equity <span style="font-weight:400;color:#94a3b8">(fleet-wide milestone)</span></div>${ro(fleetEquityPct()+'%')}</div>
         </div>
       </div>
     </div>`;
@@ -543,11 +553,11 @@ function rSetup(){
       </table>
     </div>
     <div class="card">
-      <div class="card-title">CAPEX Payback <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#94a3b8">(% of each store's net EBITDA diverted to CAPEX payback until fully repaid)</span></div>
+      <div class="card-title">CAPEX Payback <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#94a3b8">(% of each store's monthly EBITDA diverted to CAPEX payback until fully repaid)</span></div>
       <div style="max-width:280px">
         ${ni('capex-pr','CAPEX Payback Rate',S.capexPaybackRate||90,{suf:'%',step:5,min:0,max:100})}
       </div>
-      <div class="hint" style="margin-top:12px">Each store diverts this % of its net EBITDA toward its own CAPEX balance until paid off. Shown as a cash flow line item before distributions.</div>
+      <div class="hint" style="margin-top:12px">Each month, this % of that store's monthly EBITDA is diverted to its own CAPEX balance until paid off. Cash Flow table shows the annualized total (monthly × 12).</div>
     </div>`;
 }
 
@@ -586,8 +596,7 @@ function rUnits(){
     {l:'Total CAPEX',             v:$(c.tCapex),                                     a:'#94a3b8'},
     {l:'Y1 Cash on Cash Return',  v:P(y1coc),                                        a:y1coc>20?GR:AM},
     {l:'Full Payback (in yrs)',   v:actualPayback<50?actualPayback.toFixed(1)+' yrs':'N/A', a:'#94a3b8'},
-    {l:'Mature Pre-Erik EBITDA',  v:`${$(c.ebPre)} (${P(c.ebPre/c.rev*100)})`,      a:AM},
-    {l:'Mature EBITDA (Net)',     v:`${$(c.ebitda)} (${P(c.margin)})`,               a:c.ebitda>0?CY:PK},
+    {l:'Mature EBITDA',           v:`${$(c.ebitda)} (${P(c.margin)})`,               a:c.ebitda>0?CY:PK},
   ].map(m=>mc(m.l,m.v,m.a)).join('');
 
   const cRows=[
@@ -619,8 +628,6 @@ function rUnits(){
       <td style="color:${CY}">${$(rc.rev)}</td>
       <td style="color:#64748b">(${$(fixedOpex)})</td>
       <td style="color:#64748b">(${$(royalties)})</td>
-      <td style="color:${AM}">${$(rc.ebPre)}</td>
-      <td style="color:${PU}">${$(rc.erikRS)}</td>
       <td style="color:${rc.ebitda>0?CY:PK};font-weight:600">${$(rc.ebitda)}</td>
       <td>${P(rc.margin)}</td>
       <td style="color:${cum5>=c.tCapex?GR:'#334155'};font-weight:600">${$(cum5)}</td>
@@ -640,7 +647,7 @@ function rUnits(){
         </div>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr>${['Year','Ramp','Revenue','OPEX','Royalties','Pre-Erik EBITDA','Erik Rev Share','EBITDA','Margin','Cumulative EBITDA'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+            <thead><tr>${['Year','Ramp','Revenue','OPEX','Royalties','EBITDA','Margin','Cumulative EBITDA'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
             <tbody>${fy5rows}</tbody>
           </table>
         </div>
@@ -704,9 +711,7 @@ function rSysPL(){
         ${r('Misc / Admin',    d=>`(${$(d.misc)})`,  {color:'#64748b',indent:true})}
         ${r('Total OPEX',      d=>`(${$(d.fixedOpex)})`, {color:'#334155',bold:true,sep:true,shade:true})}
         ${r('Royalties & Brand Dev', d=>`(${$(d.royalties)})`, {color:'#64748b',indent:true})}
-        ${r('Pre-Erik EBITDA', d=>`${$(d.ebPre)} (${P(d.ebPreMargin)})`, {color:AM,bold:true,sep:true,shade:true})}
-        ${r('Erik Rev Share',  d=>d.erikRS>0?`(${$(d.erikRS)})`:'—', {color:PU,indent:true})}
-        ${r('EBITDA (Net)',     d=>`<span style="color:${d.ebitda>0?CY:PK}">${$(d.ebitda)}</span>`, {bold:true,sep:true,shade:true})}
+        ${r('EBITDA',          d=>`<span style="color:${d.ebitda>0?CY:PK}">${$(d.ebitda)}</span>`, {bold:true,sep:true,shade:true})}
         ${r('EBITDA Margin',   d=>P(d.margin),        {color:'#94a3b8'})}
       </tbody>
     </table></div>
@@ -790,18 +795,37 @@ function rComp(){
       </td>
     </tr>`).join('');
 
-  const rows=Array.from({length:20},(_,i)=>{
-    const comp=(S.comp&&S.comp[i])||{devFee:35000,revShare:10,equity:0};
-    const unit=S.units[i];
-    const nm=unit?`<span style="font-weight:700;color:#0f172a">${esc(unit.name)}</span>`:`<span style="color:#94a3b8">TBD${String(i+1).padStart(2,'0')}</span>`;
-    return`<tr style="background:${unit?'#fff':'#f8fafc'}">
-      <td style="font-weight:700;color:#64748b;font-size:12px">${String(i+1).padStart(2,'0')}</td>
-      <td>${nm}</td>
-      <td><div class="iw"><span class="pre">$</span>
-        <input type="number" id="comp-df-${i}" value="${comp.devFee}" step="1000" class="hp" onchange="inp('comp-df-${i}',this.value)" style="width:130px">
-      </div></td>
-    </tr>`;
-  }).join('');
+  const dfTiers=S.devFeeTiers||DEFDFTIERS;
+  // determine active dev fee tier for current store count
+  let activeDFIdx=0;
+  dfTiers.forEach((t,i)=>{if(n>0&&n<=t.t)activeDFIdx=activeDFIdx===0?i:activeDFIdx;});
+  // simpler: find first tier where n <= t
+  activeDFIdx=dfTiers.findIndex(t=>n<=t.t);
+  if(activeDFIdx<0)activeDFIdx=dfTiers.length-1;
+
+  const dfTierRows=dfTiers.map((t,i)=>{
+    const isActive=i===activeDFIdx;
+    const prevT=i===0?0:dfTiers[i-1].t;
+    const label=i===dfTiers.length-1?`Stores ${prevT+1}+`:`Stores ${prevT+1}–${t.t}`;
+    return`<tr style="background:${isActive?'#eff6ff':'#fff'};${isActive?'font-weight:700':''}">
+      <td style="color:${isActive?CY:'#334155'}">
+        ${isActive?`<span style="background:${CY};color:#fff;border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700;margin-right:6px">ACTIVE</span>`:''}
+        ${label}
+        <div class="iw" style="display:inline-flex;align-items:center;gap:6px;margin-left:8px">
+          up to store #<input type="number" id="dft-t-${i}" value="${t.t}" min="1" step="1"
+            onchange="inp('dft-t-${i}',this.value)"
+            style="width:55px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:5px 8px;font-size:13px">
+        </div>
+      </td>
+      <td>
+        <div class="iw"><span class="pre">$</span>
+          <input type="text" inputmode="decimal" id="dft-f-${i}" value="${fmtN(t.f)}"
+            onfocus="niFocus(this)" onblur="niBlur(this)"
+            onchange="inp('dft-f-${i}',this.value.replace(/,/g,''))"
+            style="width:110px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:5px 8px 5px 24px;font-size:13px">
+        </div>
+      </td>
+    </tr>`}).join('');
 
   return`
     <div class="card" style="border-top:3px solid ${PU}">
@@ -815,15 +839,16 @@ function rComp(){
         <tbody>${tierRows}</tbody>
       </table>
     </div>
-    <div class="card">
-      <div class="card-title">Erik Dev Fee by Store</div>
+    <div class="card" style="border-top:3px solid ${CY}">
+      <div class="card-title" style="color:${CY}">Dev Fee Tiers</div>
       <div style="font-size:11px;color:#94a3b8;margin-bottom:14px">
-        Dev Fee is a one-time CAPEX charge per location. Erik's ongoing comp flows through distributions.
+        Dev Fee steps down as the fleet grows. Applied per-store based on its position in the fleet at time of opening.
+        Current fleet: <strong style="color:${CY}">${n} store${n===1?'':'s'}</strong> → Active dev fee: <strong style="color:${CY}">${$(storeDevFee(Math.max(1,n)))}</strong>
       </div>
-      <div style="overflow-x:auto"><table>
-        <thead><tr><th>#</th><th>Store</th><th>Dev Fee</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table></div>
+      <table style="width:460px">
+        <thead><tr><th>Store Range</th><th>Dev Fee</th></tr></thead>
+        <tbody>${dfTierRows}</tbody>
+      </table>
     </div>`;
 }
 
@@ -834,18 +859,14 @@ function rCashFlow(){
   const dist=S.distributions||[0,0,0,0,0];
   const paybackRate=(S.capexPaybackRate||90)/100;
   // Track per-store running CAPEX balance (CAPEX + Dev Fee)
-  const capexBal=S.units.map((u,ui)=>{
-    const comp=(S.comp&&S.comp[ui])||{devFee:35000};
-    return u.capex+comp.devFee;
-  });
+  const capexBal=S.units.map((u,ui)=>u.capex+storeDevFee(ui+1));
   let cum=0;
   const rows=Array.from({length:5},(_,i)=>{
     const yr=minY+i;
     let ebitdaTot=0,totalPayback=0;
     const capexOut=S.units.filter(u=>u.oy===yr).reduce((s,u)=>{
       const ui=S.units.indexOf(u);
-      const comp=(S.comp&&S.comp[ui])||{devFee:u.devFee||35000};
-      return s+u.capex+comp.devFee;
+      return s+u.capex+storeDevFee(ui+1);
     },0);
     S.units.forEach((u,ui)=>{
       const n=yr-u.oy;if(n<0)return;
@@ -869,7 +890,7 @@ function rCashFlow(){
       <td style="color:${start>=0?GR:PK};font-weight:600">${$(start)}</td>
       <td style="color:${ebitdaTot>0?CY:PK};font-weight:600">${$(ebitdaTot)}</td>
       <td style="color:${capexOut>0?PK:'#94a3b8'}">${capexOut>0?'('+$(capexOut)+')':'\u2014'}</td>
-      <td style="color:${totalPayback>0?AM:'#94a3b8'}">${totalPayback>0?'('+$(totalPayback)+')':'\u2014'}</td>
+      <td style="color:${totalPayback>0?AM:'#94a3b8'}">${totalPayback>0?`<span>(${$(totalPayback)})</span><div style="font-size:10px;color:#94a3b8">${$(totalPayback/12)}/mo</div>`:'\u2014'}</td>
       <td><div class="iw"><span class="pre">$</span>
         <input type="text" inputmode="decimal" id="dist-${i}" value="${fmtN(d)}" class="hp" onfocus="niFocus(this)" onblur="niBlur(this)" onchange="inp('dist-${i}',this.value.replace(/,/g,''))" style="width:110px">
       </div></td>
@@ -879,7 +900,7 @@ function rCashFlow(){
   return`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
       <div class="card-title" style="margin-bottom:0">5-Year Cash Flow</div>
-      <div style="font-size:11px;color:#94a3b8;text-align:right">CAPEX Payback rate: <strong>${S.capexPaybackRate||90}%</strong> per store until repaid &nbsp;·&nbsp; Distributions are owner draws &nbsp;·&nbsp; Ending cash does not convey with sale</div>
+      <div style="font-size:11px;color:#94a3b8;text-align:right">CAPEX Payback: <strong>${S.capexPaybackRate||90}% of monthly EBITDA</strong> per store until repaid (annualized in table) &nbsp;·&nbsp; Distributions are owner draws</div>
     </div>
     <div style="overflow-x:auto"><table>
       <thead><tr>${['Year','Starting Cash','EBITDA','CAPEX Out','CAPEX Payback','Distributions','Net Cash Flow','Ending Cash Position'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
@@ -898,16 +919,17 @@ function rFY(){
     S.units.forEach(u=>{
       const n=row.yr-u.oy;
       if(n<0)return;
-      wRamp+=(S.ramp||RAMP)[Math.min(n,4)]*u.rooms;
+      // ramp × curve multiplier, both aligned to year since open
+      wRamp+=(S.ramp||RAMP)[Math.min(n,4)]*annualCurveMult(u,n)*u.rooms;
       wRooms+=u.rooms;
     });
-    const blendRamp=wRooms>0?(wRamp/wRooms*100).toFixed(0)+'%':'—';
+    const blendPerf=wRooms>0?(wRamp/wRooms*100).toFixed(0)+'%':'—';
     return`<tr style="background:${i%2===0?'#fff':'#fafbfc'}">
       <td style="font-weight:700;color:#334155">Year ${i+1} <span style="font-size:11px;color:#94a3b8;font-weight:400">(${row.yr})</span></td>
       <td style="color:${CY};font-weight:600">${$(row.rev)}</td>
       <td style="color:${row.eb>0?CY:PK};font-weight:600">${$(row.eb)}</td>
       <td>${P(row.margin)}</td>
-      <td style="color:#94a3b8">${blendRamp}</td>
+      <td style="color:#94a3b8">${blendPerf}</td>
       <td style="color:${GR};font-weight:600">${$(cum)}</td>
     </tr>`;
   }).join('');
@@ -923,7 +945,7 @@ function rFY(){
         </div>
       </div>
       <table>
-        <thead><tr>${['Year','Revenue','EBITDA','Margin','Blended Ramp','Cumulative EBITDA'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+        <thead><tr>${['Year','Revenue','EBITDA','Margin','Blended Performance','Cumulative EBITDA'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <div style="margin-top:14px;padding:12px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;color:#15803d">
@@ -952,8 +974,7 @@ function rSale(){
     let ebitdaTot=0;
     const capexOut=S.units.filter(u=>u.oy===yr).reduce((s,u)=>{
       const ui=S.units.indexOf(u);
-      const comp=(S.comp&&S.comp[ui])||{devFee:u.devFee||35000};
-      return s+u.capex+comp.devFee;
+      return s+u.capex+storeDevFee(ui+1);
     },0);
     S.units.forEach((u,ui)=>{
       const n=yr-u.oy;if(n<0)return;
@@ -1143,6 +1164,12 @@ function inp(id,val){
       if(!S.equityTiers)S.equityTiers=DEFEQTIERS.map(t=>({...t}));
       const idx=parseInt(eqm[2]);
       S.equityTiers[idx]={...S.equityTiers[idx],[eqm[1]]:isNaN(n)?0:n};
+    }
+    const dftm=id.match(/^dft-(t|f)-(\d+)$/);
+    if(dftm){
+      if(!S.devFeeTiers)S.devFeeTiers=DEFDFTIERS.map(t=>({...t}));
+      const idx=parseInt(dftm[2]);
+      S.devFeeTiers[idx]={...S.devFeeTiers[idx],[dftm[1]]:isNaN(n)?0:n};
     }
     const curveM=id.match(/^curve-(\d+)$/);
     if(curveM){
