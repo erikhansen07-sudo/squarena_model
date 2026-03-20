@@ -463,14 +463,18 @@ function rUnits(){
     cum5+=rc.ebitda;
     const paidBack=cum5>=c.tCapex;
     const justPaid=paidBack&&(cum5-rc.ebitda)<c.tCapex;
+    const fixedOpex=rc.cogs+rc.labor+rc.rent+rc.mktg+rc.misc;
+    const royalties=rc.royal+rc.bd;
     return`<tr style="background:${justPaid?'#f0fdf4':i%2===0?'#fff':'#fafbfc'};${justPaid?'font-weight:600':''}">
       <td style="color:#334155">Year ${i+1} <span style="font-size:11px;color:#94a3b8;font-weight:400">(${yr})</span>
         ${justPaid?`<span style="font-size:10px;font-weight:700;color:${GR};margin-left:6px">✓ Paid back</span>`:''}
       </td>
       <td style="color:#94a3b8">${ramp*100}%</td>
       <td style="color:${CY}">${$(rc.rev)}</td>
+      <td style="color:#64748b">(${$(fixedOpex)})</td>
+      <td style="color:#64748b">(${$(royalties)})</td>
       <td style="color:${AM}">${$(rc.ebPre)}</td>
-      <td style="color:${PU}">(${$(rc.erikRS)})</td>
+      <td style="color:${PU}">${$(rc.erikRS)}</td>
       <td style="color:${rc.ebitda>0?CY:PK};font-weight:600">${$(rc.ebitda)}</td>
       <td>${P(rc.margin)}</td>
       <td style="color:${cum5>=c.tCapex?GR:'#334155'};font-weight:600">${$(cum5)}</td>
@@ -490,7 +494,7 @@ function rUnits(){
         </div>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr>${['Year','Ramp','Revenue','Pre-Erik EBITDA','Erik Rev Share','EBITDA','Margin','Cumulative EBITDA'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+            <thead><tr>${['Year','Ramp','Revenue','OPEX','Royalties','Pre-Erik EBITDA','Erik Rev Share','EBITDA','Margin','Cumulative EBITDA'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
             <tbody>${fy5rows}</tbody>
           </table>
         </div>
