@@ -689,14 +689,14 @@ function render(){
   const P2=port();
   const tRooms=S.units.reduce((s,u)=>s+u.rooms,0);
   const TABS=[
-    {id:'locations',label:'📍 Locations'},
-    {id:'setup',    label:'⚙ Setup'},
-    {id:'units',    label:'📊 Unit P&L'},
-    {id:'portfolio',label:'🏢 Portfolio'},
-    {id:'forecast', label:'📈 5-Year'},
-    {id:'cashflow', label:'💵 Cash Flow'},
-    {id:'comp',     label:'🤝 Erik Comp'},
-    {id:'sale',     label:'💰 Sale'},
+    {id:'locations',label:'Locations'},
+    {id:'setup',    label:'Setup'},
+    {id:'units',    label:'Unit P&L'},
+    {id:'portfolio',label:'Portfolio'},
+    {id:'forecast', label:'5-Year'},
+    {id:'cashflow', label:'Cash Flow'},
+    {id:'comp',     label:'Erik Comp'},
+    {id:'sale',     label:'Sale'},
   ];
   let body='';
   if(S.tab==='locations') body=rLoc();
