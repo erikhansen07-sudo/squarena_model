@@ -179,13 +179,29 @@ function fy5(){
 }
 
 // ─── UI Helpers ────────────────────────────────────────────────────────────
-function ni(id,label,val,{pre,suf,step=1,min}={}){
+function fmtN(v){
+  const n=parseFloat(String(v).replace(/,/g,''));
+  if(isNaN(n))return v;
+  if(Math.abs(n)>=1000){
+    const parts=n.toFixed(Number.isInteger(n)?0:2).split('.');
+    parts[0]=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+    return parts[1]==='00'?parts[0]:parts.join('.');
+  }
+  return String(v);
+}
+function niFocus(el){el.value=el.value.replace(/,/g,'');}
+function niBlur(el){const n=parseFloat(el.value);if(!isNaN(n))el.value=fmtN(n);}
+
+function ni(id,label,val,{pre,suf,step=1,min,max}={}){
+  const disp=fmtN(val);
   return`<div>
     <label class="label" for="${id}">${esc(label)}</label>
     <div class="iw">
       ${pre?`<span class="pre">${esc(pre)}</span>`:''}
-      <input type="number" id="${id}" value="${val}" step="${step}"${min!=null?` min="${min}"`:''}
-        class="${pre?'hp':''} ${suf?'hs':''}" onchange="inp('${id}',this.value)">
+      <input type="text" inputmode="decimal" id="${id}" value="${disp}"
+        class="${pre?'hp':''} ${suf?'hs':''}"
+        onfocus="niFocus(this)" onblur="niBlur(this)"
+        onchange="inp('${id}',this.value.replace(/,/g,''))">
       ${suf?`<span class="suf">${esc(suf)}</span>`:''}
     </div></div>`;
 }
@@ -332,10 +348,11 @@ function rSetup(){
                 <td style="color:#334155;font-weight:500">${label}</td>
                 ${[0,1,2,3,4].map(ci=>`
                   <td><div class="iw"><span class="pre">$</span>
-                    <input type="number" id="cxm-${ri}-${ci}"
-                      value="${(S.capexMatrix||DEFCAPEX)[ri][ci]}"
-                      step="500" min="0" class="hp"
-                      onchange="inp('cxm-${ri}-${ci}',this.value)"
+                    <input type="text" inputmode="decimal" id="cxm-${ri}-${ci}"
+                      value="${fmtN((S.capexMatrix||DEFCAPEX)[ri][ci])}"
+                      class="hp"
+                      onfocus="niFocus(this)" onblur="niBlur(this)"
+                      onchange="inp('cxm-${ri}-${ci}',this.value.replace(/,/g,''))"
                       style="width:100px">
                   </div></td>`).join('')}
               </tr>`).join('')}
@@ -583,7 +600,7 @@ function rCashFlow(){
       <td style="color:${netOp>0?CY:PK};font-weight:600">${$(netOp)}</td>
       <td style="color:${capexOut>0?PK:'#94a3b8'}">${capexOut>0?'('+$(capexOut)+')':'—'}</td>
       <td><div class="iw"><span class="pre">$</span>
-        <input type="number" id="dist-${i}" value="${d}" step="5000" min="0" class="hp" onchange="inp('dist-${i}',this.value)" style="width:130px">
+        <input type="text" inputmode="decimal" id="dist-${i}" value="${fmtN(d)}" class="hp" onfocus="niFocus(this)" onblur="niBlur(this)" onchange="inp('dist-${i}',this.value.replace(/,/g,''))" style="width:130px">
       </div></td>
       <td style="color:${net>=0?CY:PK};font-weight:600">${$(net)}</td>
       <td style="color:${cum>=0?GR:PK};font-weight:700;font-size:14px">${$(cum)}</td>
