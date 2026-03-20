@@ -494,9 +494,6 @@ function rSale(){
           ${pr(`× Multiple`,em+'×','#334155')}
           <div style="border-top:2px solid #e2e8f0;margin:6px 0"></div>
           ${pr('Implied Sale Price',$(eSale),CY,true,false,15)}
-          ${pr('Less: Total CAPEX',`(${$(P2.tCX)})`,'#64748b')}
-          <div style="border-top:1px solid #e2e8f0;margin:4px 0"></div>
-          ${pr('Net Gain',$(eGain),eGain>0?GR:PK,true)}
           ${pr('Return Multiple',eRet.toFixed(2)+'×',eRet>2?GR:AM,true)}
         </div>
       </div>
@@ -508,9 +505,6 @@ function rSale(){
           ${pr('× Multiple',rm+'×','#334155')}
           <div style="border-top:2px solid #e2e8f0;margin:6px 0"></div>
           ${pr('Implied Sale Price',$(rSale),AM,true,false,15)}
-          ${pr('Less: Total CAPEX',`(${$(P2.tCX)})`,'#64748b')}
-          <div style="border-top:1px solid #e2e8f0;margin:4px 0"></div>
-          ${pr('Net Gain',$(rGain),rGain>0?GR:PK,true)}
           ${pr('Return Multiple',rRet.toFixed(2)+'×',rRet>2?GR:AM,true)}
         </div>
       </div>
