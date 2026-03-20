@@ -118,7 +118,7 @@ function annualCurveMult(u,yearIdx){
 // ─── State ─────────────────────────────────────────────────────────────────
 const DEFCOMP=Array.from({length:20},()=>({devFee:35000,revShare:10,equity:0}));
 const DEFAULTS={
-  tab:'portfolio',sel:1,
+  tab:'setup',sel:1,
   rev:{sessions:5,price:130,util:85,addon:8},
   costs:{royalty:6,branddev:2},
   sale:{em:4,rm:1.5},
@@ -634,6 +634,59 @@ function rUnits(){
   </div>`;
 }
 
+// ─── Tab: System P&L ────────────────────────────────────────────────────────
+function rSysPL(){
+  if(!S.units.length)return`<div class="card">No locations defined yet.</div>`;
+  const minY=Math.min(...S.units.map(u=>u.oy));
+  const data=Array.from({length:5},(_,i)=>{
+    const yr=minY+i;
+    let rev=0,cogs=0,labor=0,rent=0,mktg=0,misc=0,royal=0,bd=0,erikRS=0;
+    S.units.forEach((u,ui)=>{
+      const n=yr-u.oy;if(n<0)return;
+      const ramp=(S.ramp||RAMP)[Math.min(n,4)]*annualCurveMult(u,n);
+      const c=cu(u,ramp,ui);
+      rev+=c.rev;cogs+=c.cogs;labor+=c.labor;rent+=c.rent;
+      mktg+=c.mktg;misc+=c.misc;royal+=c.royal;bd+=c.bd;erikRS+=c.erikRS;
+    });
+    const fixedOpex=cogs+labor+rent+mktg+misc;
+    const royalties=royal+bd;
+    const ebPre=rev-fixedOpex-royalties;
+    const ebitda=ebPre-erikRS;
+    return{yr,i,rev,cogs,labor,rent,mktg,misc,fixedOpex,royalties,ebPre,erikRS,ebitda,margin:rev>0?ebitda/rev*100:0,ebPreMargin:rev>0?ebPre/rev*100:0};
+  });
+
+  const th=`<th style="text-align:right;min-width:120px">`;
+  const r=(label,fn,{color='#334155',bold=false,indent=false,sep=false,shade=false}={})=>`
+    <tr style="background:${shade?'#f8fafc':'#fff'};${sep?'border-top:2px solid #e2e8f0;':''}">
+      <td style="font-size:12px;color:${color};font-weight:${bold?700:500};padding-left:${indent?24:10}px;white-space:nowrap">${label}</td>
+      ${data.map(d=>`<td style="text-align:right;font-size:12px;color:${color};font-weight:${bold?700:500}">${fn(d)}</td>`).join('')}
+    </tr>`;
+
+  return`<div class="card">
+    <div class="card-title">System P&L — 5 Year</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr>
+        <th style="text-align:left;min-width:190px"></th>
+        ${data.map(d=>`${th}Year ${d.i+1} (${d.yr})</th>`).join('')}
+      </tr></thead>
+      <tbody>
+        ${r('Revenue',         d=>$(d.rev),          {color:CY,bold:true,shade:true})}
+        ${r('COGS / Supplies', d=>`(${$(d.cogs)})`,  {color:'#64748b',indent:true})}
+        ${r('Labor',           d=>`(${$(d.labor)})`, {color:'#64748b',indent:true})}
+        ${r('Rent',            d=>`(${$(d.rent)})`,  {color:'#64748b',indent:true})}
+        ${r('Marketing',       d=>`(${$(d.mktg)})`,  {color:'#64748b',indent:true})}
+        ${r('Misc / Admin',    d=>`(${$(d.misc)})`,  {color:'#64748b',indent:true})}
+        ${r('Total OPEX',      d=>`(${$(d.fixedOpex)})`, {color:'#334155',bold:true,sep:true,shade:true})}
+        ${r('Royalties & Brand Dev', d=>`(${$(d.royalties)})`, {color:'#64748b',indent:true})}
+        ${r('Pre-Erik EBITDA', d=>`${$(d.ebPre)} (${P(d.ebPreMargin)})`, {color:AM,bold:true,sep:true,shade:true})}
+        ${r('Erik Rev Share',  d=>d.erikRS>0?`(${$(d.erikRS)})`:'—', {color:PU,indent:true})}
+        ${r('EBITDA (Net)',     d=>$(d.ebitda),       {color:d.ebitda>0?CY:PK,bold:true,sep:true,shade:true})}
+        ${r('EBITDA Margin',   d=>P(d.margin),        {color:'#94a3b8'})}
+      </tbody>
+    </table></div>
+  </div>`;
+}
+
 // ─── Tab: Portfolio ─────────────────────────────────────────────────────────
 function rPort(){
   const P2=port();
@@ -931,6 +984,7 @@ function render(){
     {id:'locations',label:'Locations'},
     {id:'perf',     label:'Performance'},
     {id:'units',    label:'Unit P&L'},
+    {id:'syspl',    label:'System P&L'},
     {id:'portfolio',label:'Portfolio'},
     {id:'forecast', label:'5-Year'},
     {id:'cashflow', label:'Cash Flow'},
@@ -942,6 +996,7 @@ function render(){
   if(S.tab==='perf')      body=rPerf();
   if(S.tab==='setup')     body=rSetup();
   if(S.tab==='units')     body=rUnits();
+  if(S.tab==='syspl')     body=rSysPL();
   if(S.tab==='portfolio') body=rPort();
   if(S.tab==='forecast')  body=rFY();
   if(S.tab==='cashflow')  body=rCashFlow();
