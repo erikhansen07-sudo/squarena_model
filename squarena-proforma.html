@@ -385,8 +385,8 @@ function rUnits(){
     {l:'Total CAPEX',             v:$(c.tCapex),                                     a:'#94a3b8'},
     {l:'Y1 Cash on Cash Return',  v:P(c.coc),                                        a:c.coc>20?GR:AM},
     {l:'Full Payback (in yrs)',   v:c.payback<50?c.payback.toFixed(1)+' yrs':'N/A', a:'#94a3b8'},
-    {l:'Pre-Erik EBITDA',         v:`${$(c.ebPre)} (${P(c.ebPre/c.rev*100)})`,      a:AM},
-    {l:'EBITDA (Net)',            v:`${$(c.ebitda)} (${P(c.margin)})`,               a:c.ebitda>0?CY:PK},
+    {l:'Mature Pre-Erik EBITDA',  v:`${$(c.ebPre)} (${P(c.ebPre/c.rev*100)})`,      a:AM},
+    {l:'Mature EBITDA (Net)',     v:`${$(c.ebitda)} (${P(c.margin)})`,               a:c.ebitda>0?CY:PK},
   ].map(m=>mc(m.l,m.v,m.a)).join('');
 
   const cRows=[
@@ -478,6 +478,7 @@ function rPort(){
     </tr>`).join('');
 
   return`
+    <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Annual Portfolio at Maturity</div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">${mets}</div>
     <div class="card">
       <div class="card-title">Location Comparison</div>
@@ -732,8 +733,8 @@ function render(){
   const P2=port();
   const tRooms=S.units.reduce((s,u)=>s+u.rooms,0);
   const TABS=[
-    {id:'locations',label:'Locations'},
     {id:'setup',    label:'Setup'},
+    {id:'locations',label:'Locations'},
     {id:'units',    label:'Unit P&L'},
     {id:'portfolio',label:'Portfolio'},
     {id:'forecast', label:'5-Year'},
