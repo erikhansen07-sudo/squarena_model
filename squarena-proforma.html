@@ -366,7 +366,7 @@ function rUnits(){
     </tr>`;
   }).join('');
 
-  return`<div class="g2">
+  return`<div style="display:grid;grid-template-columns:220px 1fr;gap:14px">
     <div>
       <div class="card"><div class="card-title">Select Location</div>${cards}</div>
     </div>
@@ -501,12 +501,14 @@ function rCashFlow(){
     const netOp=ebPre-erikRS;
     const d=dist[i]||0;
     const net=netOp-capexOut-d;
+    const start=cum;
     cum+=net;
-    return{yr,ebPre,erikRS,netOp,capexOut,d,net,cum,i};
+    return{yr,ebPre,erikRS,netOp,capexOut,d,net,cum,start,i};
   });
-  const tRows=rows.map(({yr,ebPre,erikRS,netOp,capexOut,d,net,cum,i})=>`
+  const tRows=rows.map(({yr,ebPre,erikRS,netOp,capexOut,d,net,cum,start,i})=>`
     <tr style="background:${i%2===0?'#fff':'#fafbfc'}">
       <td style="font-weight:700;color:#334155">Year ${i+1} <span style="font-size:11px;color:#94a3b8;font-weight:400">(${yr})</span></td>
+      <td style="color:${start>=0?GR:PK};font-weight:600">${$(start)}</td>
       <td style="color:${GR};font-weight:600">${$(ebPre)}</td>
       <td style="color:${PU}">(${$(erikRS)})</td>
       <td style="color:${netOp>0?CY:PK};font-weight:600">${$(netOp)}</td>
@@ -517,23 +519,15 @@ function rCashFlow(){
       <td style="color:${net>=0?CY:PK};font-weight:600">${$(net)}</td>
       <td style="color:${cum>=0?GR:PK};font-weight:700;font-size:14px">${$(cum)}</td>
     </tr>`).join('');
-  const finalCum=rows[4]?.cum||0;
-  const P2=port();
-  const eSale=P2.tEB*(S.sale?.em||4),rSale=P2.tRev*(S.sale?.rm||1.5);
   return`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
       <div class="card-title" style="margin-bottom:0">5-Year Cash Flow</div>
-      <div style="font-size:11px;color:#94a3b8;text-align:right">Distributions are owner draws · Cash in bank does not convey with sale</div>
+      <div style="font-size:11px;color:#94a3b8;text-align:right">Distributions are owner draws · Ending cash does not convey with sale</div>
     </div>
     <div style="overflow-x:auto"><table>
-      <thead><tr>${['Year','Pre-Erik EBITDA','Erik Rev Share','Net Op. Cash','CAPEX Out','Distributions','Net Cash Flow','Cash in Bank'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+      <thead><tr>${['Year','Starting Cash','Pre-Erik EBITDA','Erik Rev Share','Net Op. Cash','CAPEX Out','Distributions','Net Cash Flow','Ending Cash Position'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
       <tbody>${tRows}</tbody>
     </table></div>
-    <div style="margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-      ${mc('Cash in Bank at Year 5',$(finalCum),finalCum>=0?GR:PK,'After distributions, before sale')}
-      ${mc('EBITDA-Based Sale',$(eSale),CY,`At ${S.sale?.em||4}× EBITDA · Set in Sale tab`)}
-      ${mc('Revenue-Based Sale',$(rSale),AM,`At ${S.sale?.rm||1.5}× Revenue · Set in Sale tab`)}
-    </div>
   </div>`;
 }
 
@@ -583,9 +577,29 @@ function rSale(){
   const eGain=eSale-P2.tCX, rGain=rSale-P2.tCX;
   const eRet=P2.tCX>0?eSale/P2.tCX:0, rRet=P2.tCX>0?rSale/P2.tCX:0;
 
-  // Sensitivity
-  const emults=[2,3,4,5,6,7,8];
-  const rmults=[0.5,1.0,1.5,2.0,2.5,3.0];
+  // Compute ending cash position (Year 5 cumulative)
+  const minY=S.units.length?Math.min(...S.units.map(u=>u.oy)):new Date().getFullYear();
+  const dist=S.distributions||[0,0,0,0,0];
+  let cfCum=0;
+  for(let i=0;i<5;i++){
+    const yr=minY+i;
+    let ebPre=0,erikRS=0;
+    const capexOut=S.units.filter(u=>u.oy===yr).reduce((s,u)=>{
+      const ui=S.units.indexOf(u);
+      const comp=(S.comp&&S.comp[ui])||{devFee:u.devFee||35000};
+      return s+u.capex+comp.devFee;
+    },0);
+    S.units.forEach((u,ui)=>{
+      const n=yr-u.oy;if(n<0)return;
+      const rc=cu(u,RAMP[Math.min(n,4)],ui);
+      ebPre+=rc.ebPre;erikRS+=rc.erikRS;
+    });
+    cfCum+=(ebPre-erikRS)-capexOut-(dist[i]||0);
+  }
+
+  // Sensitivity — 1× to 10× integers
+  const emults=[1,2,3,4,5,6,7,8,9,10];
+  const rmults=[1,2,3,4,5,6,7,8,9,10];
   const eRows=emults.map((m,i)=>`
     <tr style="background:${m===em?'#eff6ff':i%2===0?'#fff':'#fafbfc'};${m===em?'font-weight:700':''}">
       <td style="color:${CY}">${m}×</td>
@@ -614,24 +628,26 @@ function rSale(){
     <div class="g2">
       <div class="card" style="border-top:3px solid ${CY}">
         <div class="card-title" style="color:${CY}">EBITDA-Based Valuation</div>
-        ${ni('sale-em','EBITDA Multiple',em,{suf:'×',step:.5,min:.5})}
+        ${ni('sale-em','EBITDA Multiple',em,{suf:'×',step:1,min:1})}
         <div style="margin-top:16px">
           ${pr('System EBITDA',$(P2.tEB),'#334155')}
           ${pr(`× Multiple`,em+'×','#334155')}
           <div style="border-top:2px solid #e2e8f0;margin:6px 0"></div>
           ${pr('Implied Sale Price',$(eSale),CY,true,false,15)}
           ${pr('Return Multiple',eRet.toFixed(2)+'×',eRet>2?GR:AM,true)}
+          ${pr('Ending Cash Position',$(cfCum),cfCum>=0?GR:PK,false)}
         </div>
       </div>
       <div class="card" style="border-top:3px solid ${AM}">
         <div class="card-title" style="color:${AM}">Revenue-Based Valuation</div>
-        ${ni('sale-rm','Revenue Multiple',rm,{suf:'×',step:.25,min:.25})}
+        ${ni('sale-rm','Revenue Multiple',rm,{suf:'×',step:1,min:1})}
         <div style="margin-top:16px">
           ${pr('System Revenue',$(P2.tRev),'#334155')}
           ${pr('× Multiple',rm+'×','#334155')}
           <div style="border-top:2px solid #e2e8f0;margin:6px 0"></div>
           ${pr('Implied Sale Price',$(rSale),AM,true,false,15)}
           ${pr('Return Multiple',rRet.toFixed(2)+'×',rRet>2?GR:AM,true)}
+          ${pr('Ending Cash Position',$(cfCum),cfCum>=0?GR:PK,false)}
         </div>
       </div>
     </div>
