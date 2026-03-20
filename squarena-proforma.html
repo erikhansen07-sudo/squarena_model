@@ -130,6 +130,7 @@ const DEFAULTS={
   opexMatrix:DEFOPEX.map(r=>[...r]),
   comp:DEFCOMP.map(c=>({...c})),
   distributions:[0,0,0,0,0],
+  retentionRates:[10,10,10,10,10],
   capexPaybackRate:90,
   equityTiers:DEFEQTIERS.map(t=>({...t})),
   devFeeTiers:DEFDFTIERS.map(t=>({...t})),
@@ -144,6 +145,7 @@ function migrateState(s){
   if(!s.ramp)s.ramp=[.50,.70,.88,1.00,1.00];
   if(!s.capexMatrix)s.capexMatrix=DEFCAPEX.map(r=>[...r]);
   if(!s.opexMatrix)s.opexMatrix=DEFOPEX.map(r=>[...r]);
+  if(!s.retentionRates)s.retentionRates=[10,10,10,10,10];
   if(!s.capexPaybackRate)s.capexPaybackRate=90;
   if(!s.equityTiers)s.equityTiers=DEFEQTIERS.map(t=>({...t}));
   if(!s.devFeeTiers)s.devFeeTiers=DEFDFTIERS.map(t=>({...t}));
@@ -856,14 +858,15 @@ function rComp(){
 function rCashFlow(){
   if(!S.units.length)return`<div class="card">No locations defined yet.</div>`;
   const minY=Math.min(...S.units.map(u=>u.oy));
-  const dist=S.distributions||[0,0,0,0,0];
+  const retRates=S.retentionRates||[10,10,10,10,10];
   const paybackRate=(S.capexPaybackRate||90)/100;
   // Track per-store running CAPEX balance (CAPEX + Dev Fee)
   const capexBal=S.units.map((u,ui)=>u.capex+storeDevFee(ui+1));
   let cum=0;
   const rows=Array.from({length:5},(_,i)=>{
     const yr=minY+i;
-    let ebitdaTot=0,totalPayback=0;
+    const retPct=(retRates[i]||0)/100;
+    let ebitdaTot=0,totalRetention=0,totalPayback=0;
     const capexOut=S.units.filter(u=>u.oy===yr).reduce((s,u)=>{
       const ui=S.units.indexOf(u);
       return s+u.capex+storeDevFee(ui+1);
@@ -872,38 +875,50 @@ function rCashFlow(){
       const n=yr-u.oy;if(n<0)return;
       const rc=cu(u,(S.ramp||RAMP)[Math.min(n,4)]*annualCurveMult(u,n),ui);
       ebitdaTot+=rc.ebitda;
-      if(capexBal[ui]>0&&rc.ebitda>0){
-        const pmt=Math.min(capexBal[ui],rc.ebitda*paybackRate);
+      // retention first, then payback from remainder
+      const storeRetention=Math.max(0,rc.ebitda)*retPct;
+      const storeAfterRetention=Math.max(0,rc.ebitda-storeRetention);
+      totalRetention+=storeRetention;
+      if(capexBal[ui]>0&&storeAfterRetention>0){
+        const pmt=Math.min(capexBal[ui],storeAfterRetention*paybackRate);
         totalPayback+=pmt;
         capexBal[ui]=Math.max(0,capexBal[ui]-pmt);
       }
     });
-    const d=dist[i]||0;
-    const net=ebitdaTot-capexOut-totalPayback-d;
+    const distributions=ebitdaTot-capexOut-totalRetention-totalPayback;
+    const net=distributions; // distributions = all free cash after deductions
     const start=cum;
     cum+=net;
-    return{yr,ebitdaTot,capexOut,totalPayback,d,net,cum,start,i};
+    return{yr,ebitdaTot,capexOut,totalRetention,retPct,totalPayback,distributions,net,cum,start,i};
   });
-  const tRows=rows.map(({yr,ebitdaTot,capexOut,totalPayback,d,net,cum,start,i})=>`
+  const tRows=rows.map(({yr,ebitdaTot,capexOut,totalRetention,retPct,totalPayback,distributions,net,cum,start,i})=>`
     <tr style="background:${i%2===0?'#fff':'#fafbfc'}">
       <td style="font-weight:700;color:#334155">Year ${i+1} <span style="font-size:11px;color:#94a3b8;font-weight:400">(${yr})</span></td>
       <td style="color:${start>=0?GR:PK};font-weight:600">${$(start)}</td>
       <td style="color:${ebitdaTot>0?CY:PK};font-weight:600">${$(ebitdaTot)}</td>
       <td style="color:${capexOut>0?PK:'#94a3b8'}">${capexOut>0?'('+$(capexOut)+')':'\u2014'}</td>
-      <td style="color:${totalPayback>0?AM:'#94a3b8'}">${totalPayback>0?`<span>(${$(totalPayback)})</span><div style="font-size:10px;color:#94a3b8">${$(totalPayback/12)}/mo</div>`:'\u2014'}</td>
-      <td><div class="iw"><span class="pre">$</span>
-        <input type="text" inputmode="decimal" id="dist-${i}" value="${fmtN(d)}" class="hp" onfocus="niFocus(this)" onblur="niBlur(this)" onchange="inp('dist-${i}',this.value.replace(/,/g,''))" style="width:110px">
-      </div></td>
-      <td style="color:${net>=0?CY:PK};font-weight:600">${$(net)}</td>
+      <td>
+        <div class="iw"><span class="suf">%</span>
+          <input type="text" inputmode="decimal" id="ret-${i}" value="${retRates[i]||0}"
+            class="hs" onfocus="niFocus(this)" onblur="niBlur(this)"
+            onchange="inp('ret-${i}',this.value.replace(/,/g,''))" style="width:70px">
+        </div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px">${totalRetention>0?'('+$(totalRetention)+')':'\u2014'}</div>
+      </td>
+      <td style="color:${totalPayback>0?AM:'#94a3b8'}">${totalPayback>0?'('+$(totalPayback)+')':'\u2014'}</td>
+      <td style="color:${distributions>=0?GR:PK};font-weight:600">${$(distributions)}</td>
       <td style="color:${cum>=0?GR:PK};font-weight:700;font-size:14px">${$(cum)}</td>
     </tr>`).join('');
   return`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
       <div class="card-title" style="margin-bottom:0">5-Year Cash Flow</div>
-      <div style="font-size:11px;color:#94a3b8;text-align:right">CAPEX Payback: <strong>${S.capexPaybackRate||90}% of monthly EBITDA</strong> per store until repaid (annualized in table) &nbsp;·&nbsp; Distributions are owner draws</div>
+      <div style="font-size:11px;color:#94a3b8;text-align:right">
+        Retention = % of monthly EBITDA held as operating reserve &nbsp;·&nbsp;
+        CAPEX Payback = ${S.capexPaybackRate||90}% of post-retention EBITDA per store until repaid
+      </div>
     </div>
     <div style="overflow-x:auto"><table>
-      <thead><tr>${['Year','Starting Cash','EBITDA','CAPEX Out','CAPEX Payback','Distributions','Net Cash Flow','Ending Cash Position'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+      <thead><tr>${['Year','Starting Cash','EBITDA','CAPEX Out','Retention','CAPEX Payback','Distributions','Ending Cash Position'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
       <tbody>${tRows}</tbody>
     </table></div>
   </div>`;
@@ -968,10 +983,14 @@ function rSale(){
   const minY=S.units.length?Math.min(...S.units.map(u=>u.oy)):new Date().getFullYear();
   const dist=S.distributions||[0,0,0,0,0];
   const totalDist=dist.reduce((s,d)=>s+(d||0),0);
+  const cfCapexBal=S.units.map((u,ui)=>u.capex+storeDevFee(ui+1));
+  const cfRetRates=S.retentionRates||[10,10,10,10,10];
+  const cfPaybackRate=(S.capexPaybackRate||90)/100;
   let cfCum=0;
   for(let i=0;i<5;i++){
     const yr=minY+i;
-    let ebitdaTot=0;
+    const retPct=(cfRetRates[i]||0)/100;
+    let ebitdaTot=0,totalRetention=0,totalPayback=0;
     const capexOut=S.units.filter(u=>u.oy===yr).reduce((s,u)=>{
       const ui=S.units.indexOf(u);
       return s+u.capex+storeDevFee(ui+1);
@@ -980,8 +999,16 @@ function rSale(){
       const n=yr-u.oy;if(n<0)return;
       const rc=cu(u,(S.ramp||RAMP)[Math.min(n,4)]*annualCurveMult(u,n),ui);
       ebitdaTot+=rc.ebitda;
+      const storeRetention=Math.max(0,rc.ebitda)*retPct;
+      const storeAfterRetention=Math.max(0,rc.ebitda-storeRetention);
+      totalRetention+=storeRetention;
+      if(cfCapexBal[ui]>0&&storeAfterRetention>0){
+        const pmt=Math.min(cfCapexBal[ui],storeAfterRetention*cfPaybackRate);
+        totalPayback+=pmt;
+        cfCapexBal[ui]=Math.max(0,cfCapexBal[ui]-pmt);
+      }
     });
-    cfCum+=ebitdaTot-capexOut-(dist[i]||0);
+    cfCum+=ebitdaTot-capexOut-totalRetention-totalPayback;
   }
 
   // Sensitivity — 1× to 10× integers
@@ -1210,6 +1237,11 @@ function inp(id,val){
     if(dm){
       if(!S.distributions)S.distributions=[0,0,0,0,0];
       S.distributions[parseInt(dm[1])]=isNaN(n)?0:n;
+    }
+    const retm=id.match(/^ret-(\d+)$/);
+    if(retm){
+      if(!S.retentionRates)S.retentionRates=[10,10,10,10,10];
+      S.retentionRates[parseInt(retm[1])]=isNaN(n)?0:Math.max(0,Math.min(100,n));
     }
     const m=id.match(/^u([a-z]+)-(\d+)$/);
     if(m){
