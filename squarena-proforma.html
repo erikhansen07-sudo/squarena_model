@@ -513,9 +513,9 @@ function rPort(){
   const P2=port();
   const tRooms=S.units.reduce((s,u)=>s+u.rooms,0);
   const mets=[
-    {l:'Total Revenue',  v:$(P2.tRev),                               a:CY},
-    {l:'Total EBITDA',   v:$(P2.tEB), s:P(P2.blend)+' margin',       a:CY},
-    {l:'Sites',          v:S.units.length+' sites', s:tRooms+' total rooms', a:PK},
+    {l:'Total System Annual Revenue at Maturity',  v:$(P2.tRev),                         a:CY},
+    {l:'Total System Annual EBITDA at Maturity',   v:$(P2.tEB), s:P(P2.blend)+' margin', a:CY},
+    {l:'', v:`${S.units.length} Locations · ${tRooms} Total Rooms`, a:PK},
   ].map(m=>mc(m.l,m.v,m.a,m.s||'')).join('');
 
   const rows=P2.res.map((u,i)=>`
