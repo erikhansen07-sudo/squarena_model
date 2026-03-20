@@ -680,7 +680,7 @@ function rSysPL(){
         ${r('Royalties & Brand Dev', d=>`(${$(d.royalties)})`, {color:'#64748b',indent:true})}
         ${r('Pre-Erik EBITDA', d=>`${$(d.ebPre)} (${P(d.ebPreMargin)})`, {color:AM,bold:true,sep:true,shade:true})}
         ${r('Erik Rev Share',  d=>d.erikRS>0?`(${$(d.erikRS)})`:'—', {color:PU,indent:true})}
-        ${r('EBITDA (Net)',     d=>$(d.ebitda),       {color:d.ebitda>0?CY:PK,bold:true,sep:true,shade:true})}
+        ${r('EBITDA (Net)',     d=>`<span style="color:${d.ebitda>0?CY:PK}">${$(d.ebitda)}</span>`, {bold:true,sep:true,shade:true})}
         ${r('EBITDA Margin',   d=>P(d.margin),        {color:'#94a3b8'})}
       </tbody>
     </table></div>
