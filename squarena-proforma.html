@@ -606,12 +606,21 @@ function rFY(){
   let cum=0;
   const rows=data.map((row,i)=>{
     cum+=row.eb;
+    // Blended ramp: rooms-weighted average across all open stores this year
+    let wRamp=0,wRooms=0;
+    S.units.forEach(u=>{
+      const n=row.yr-u.oy;
+      if(n<0)return;
+      wRamp+=(S.ramp||RAMP)[Math.min(n,4)]*u.rooms;
+      wRooms+=u.rooms;
+    });
+    const blendRamp=wRooms>0?(wRamp/wRooms*100).toFixed(0)+'%':'—';
     return`<tr style="background:${i%2===0?'#fff':'#fafbfc'}">
       <td style="font-weight:700;color:#334155">Year ${i+1} <span style="font-size:11px;color:#94a3b8;font-weight:400">(${row.yr})</span></td>
       <td style="color:${CY};font-weight:600">${$(row.rev)}</td>
       <td style="color:${row.eb>0?CY:PK};font-weight:600">${$(row.eb)}</td>
       <td>${P(row.margin)}</td>
-      <td style="color:#94a3b8">${((S.ramp||RAMP)[Math.min(i,4)]*100).toFixed(0)}%</td>
+      <td style="color:#94a3b8">${blendRamp}</td>
       <td style="color:${GR};font-weight:600">${$(cum)}</td>
     </tr>`;
   }).join('');
