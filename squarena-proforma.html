@@ -54,21 +54,29 @@ const CY='#0284c7',PK='#e11d48',GR='#16a34a',AM='#d97706',PU='#7c3aed';
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 // ─── State ─────────────────────────────────────────────────────────────────
+const DEFCOMP=Array.from({length:20},()=>({devFee:35000,revShare:10,equity:0}));
 const DEFAULTS={
   tab:'portfolio',sel:1,
   rev:{sessions:5,price:130,util:85,addon:8},
   costs:{royalty:6,branddev:2},
   sale:{em:4,rm:1.5},
+  comp:DEFCOMP.map(c=>({...c})),
+  distributions:[0,0,0,0,0],
   units:[
-    {id:1,name:'Solana Beach',  om:1,oy:2026,rooms:2,capex:150000,rent:6500,
-     mCogs:2500,mLabor:9250,mMktg:1500,mMisc:1500,devFee:35000,revShare:10},
-    {id:2,name:'Mission Valley',om:1,oy:2027,rooms:3,capex:185000,rent:8500,
-     mCogs:2500,mLabor:9250,mMktg:1500,mMisc:1500,devFee:35000,revShare:10},
+    {id:1,name:'Solana Beach',  om:1,oy:2026,rooms:2,capex:150000,rent:6500,mCogs:2500,mLabor:9250,mMktg:1500,mMisc:1500},
+    {id:2,name:'Mission Valley',om:1,oy:2027,rooms:3,capex:185000,rent:8500,mCogs:2500,mLabor:9250,mMktg:1500,mMisc:1500},
   ]
 };
+function migrateState(s){
+  if(!s.comp){s.comp=Array.from({length:20},(_,i)=>({devFee:s.units[i]?.devFee||35000,revShare:s.units[i]?.revShare||10,equity:0}));}
+  if(!s.distributions)s.distributions=[0,0,0,0,0];
+  // ensure comp has 20 slots
+  while(s.comp.length<20)s.comp.push({devFee:35000,revShare:10,equity:0});
+  return s;
+}
 let nid=3;
-let S=DEFAULTS;
-try{const raw=localStorage.getItem('sq-state');if(raw){S=JSON.parse(raw);nid=Math.max(...S.units.map(u=>u.id))+1;}}catch(e){}
+let S={...DEFAULTS,comp:DEFAULTS.comp.map(c=>({...c}))};
+try{const raw=localStorage.getItem('sq-state');if(raw){S=migrateState(JSON.parse(raw));nid=Math.max(...S.units.map(u=>u.id))+1;}}catch(e){}
 function save(){try{localStorage.setItem('sq-state',JSON.stringify(S));}catch(e){}}
 
 // ─── Firebase Sync ────────────────────────────────────────────────────────────
@@ -82,7 +90,7 @@ async function ghLoad(){
     if(!res.ok)throw new Error(res.status);
     const parsed=await res.json();
     if(parsed&&parsed.units&&parsed.units.length){
-      S={...DEFAULTS,...parsed,units:parsed.units};
+      S=migrateState({...DEFAULTS,...parsed,units:parsed.units});
       nid=Math.max(...S.units.map(u=>u.id))+1;
       save();
     }
@@ -114,8 +122,10 @@ const P=n=>n.toFixed(1)+'%';
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 // ─── Calc ──────────────────────────────────────────────────────────────────
-function cu(u,ramp=1){
+function cu(u,ramp=1,idx=null){
   const r=S.rev,c=S.costs;
+  const i=idx!==null?idx:S.units.findIndex(x=>x.id===u.id);
+  const comp=(i>=0&&S.comp&&S.comp[i])?S.comp[i]:{devFee:u.devFee||35000,revShare:u.revShare||10,equity:0};
   const sessRev=u.rooms*r.sessions*r.price*(r.util/100)*365*ramp;
   const addonRev=sessRev*r.addon/100;
   const rev=sessRev+addonRev;
@@ -123,18 +133,18 @@ function cu(u,ramp=1){
   const royal=rev*c.royalty/100,bd=rev*c.branddev/100;
   const opexPre=cogs+labor+rent+mktg+misc+royal+bd;
   const ebPre=rev-opexPre;
-  const erikRS=Math.max(0,ebPre)*u.revShare/100;
+  const erikRS=Math.max(0,ebPre)*comp.revShare/100;
   const opex=opexPre+erikRS;
   const ebitda=rev-opex;
   const margin=rev>0?ebitda/rev*100:0;
-  const tCapex=u.capex+u.devFee;
+  const tCapex=u.capex+comp.devFee;
   const payback=ebitda>0?tCapex/ebitda:Infinity;
   const coc=tCapex>0?ebitda/tCapex*100:0;
-  return{sessRev,addonRev,rev,cogs,labor,rent,mktg,misc,royal,bd,opexPre,ebPre,erikRS,opex,ebitda,margin,tCapex,payback,coc};
+  return{sessRev,addonRev,rev,cogs,labor,rent,mktg,misc,royal,bd,opexPre,ebPre,erikRS,opex,ebitda,margin,tCapex,payback,coc,comp};
 }
 
 function port(){
-  const res=S.units.map(u=>({...u,c:cu(u)}));
+  const res=S.units.map((u,i)=>({...u,c:cu(u,1,i)}));
   const tRev=res.reduce((s,r)=>s+r.c.rev,0);
   const tEB=res.reduce((s,r)=>s+r.c.ebitda,0);
   const tCX=res.reduce((s,r)=>s+r.c.tCapex,0);
@@ -145,15 +155,15 @@ function fy5(){
   const minY=Math.min(...S.units.map(u=>u.oy));
   return Array.from({length:5},(_,i)=>{
     const yr=minY+i;
-    let rev=0,eb=0;
-    S.units.forEach(u=>{
+    let rev=0,eb=0,ebPre=0,erikRS=0;
+    S.units.forEach((u,ui)=>{
       const n=yr-u.oy;
       if(n<0)return;
       const ramp=RAMP[Math.min(n,4)];
-      const c=cu(u,ramp);
-      rev+=c.rev;eb+=c.ebitda;
+      const c=cu(u,ramp,ui);
+      rev+=c.rev;eb+=c.ebitda;ebPre+=c.ebPre;erikRS+=c.erikRS;
     });
-    return{yr,rev,eb,margin:rev>0?eb/rev*100:0,ramp:i<5?RAMP[i]*100:100};
+    return{yr,rev,eb,ebPre,erikRS,margin:rev>0?eb/rev*100:0};
   });
 }
 
@@ -189,12 +199,18 @@ const LOGO=`<img src="logo.png" style="height:40px;display:block;object-fit:cont
 // ─── Tab: Locations ────────────────────────────────────────────────────────
 function rLoc(){
   const yrs=[2024,2025,2026,2027,2028,2029,2030];
-  const uHTML=S.units.map(u=>`
+  const uHTML=S.units.map((u,i)=>{
+    const comp=(S.comp&&S.comp[i])||{devFee:35000,revShare:10,equity:0};
+    const sn=String(i+1).padStart(2,'0');
+    return`
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <input type="text" id="un-${u.id}" value="${esc(u.name)}"
-          style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:7px 10px;color:#0f172a;font-size:15px;font-weight:700;flex:1;margin-right:12px;outline:none"
-          onchange="inp('un-${u.id}',this.value)">
+        <div style="display:flex;align-items:center;flex:1;margin-right:12px;gap:10px">
+          <span style="font-size:11px;font-weight:700;color:#fff;background:#94a3b8;border-radius:4px;padding:3px 8px;white-space:nowrap">STORE ${sn}</span>
+          <input type="text" id="un-${u.id}" value="${esc(u.name)}"
+            style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:7px 10px;color:#0f172a;font-size:15px;font-weight:700;flex:1;outline:none"
+            onchange="inp('un-${u.id}',this.value)">
+        </div>
         ${S.units.length>1?`<button class="btn-del" onclick="delUnit(${u.id})">Remove</button>`:''}
       </div>
 
@@ -202,7 +218,7 @@ function rLoc(){
         <div>
           <label class="label">Open Month</label>
           <select id="uom-${u.id}" oninput="inp('uom-${u.id}',this.value)">
-            ${MONTHS.map((m,i)=>`<option value="${i+1}"${u.om==i+1?' selected':''}>${m}</option>`).join('')}
+            ${MONTHS.map((m,mi)=>`<option value="${mi+1}"${u.om==mi+1?' selected':''}>${m}</option>`).join('')}
           </select>
         </div>
         <div>
@@ -225,23 +241,33 @@ function rLoc(){
           ${ni(`umi-${u.id}`,'Misc / Admin',u.mMisc,{pre:'$',step:100})}
         </div>
         <div style="margin-top:10px;font-size:11px;color:#94a3b8">
-          Total fixed costs/mo: <strong style="color:#334155">${$(( u.rent+u.mCogs+u.mLabor+u.mMktg+u.mMisc))}</strong>
+          Total fixed costs/mo: <strong style="color:#334155">${$(u.rent+u.mCogs+u.mLabor+u.mMktg+u.mMisc)}</strong>
           &nbsp;·&nbsp; Annual: <strong style="color:#334155">${$((u.rent+u.mCogs+u.mLabor+u.mMktg+u.mMisc)*12)}</strong>
         </div>
       </div>
 
       <div class="lsec" style="margin-top:10px;border-color:#e9d5ff;background:#faf5ff">
-        <div class="lsec-title" style="color:#7c3aed">Erik Fees</div>
-        <div class="g4">
-          ${ni(`udf-${u.id}`,'Dev Fee (CAPEX)',u.devFee,{pre:'$',step:1000})}
-          ${ni(`urs-${u.id}`,'Rev Share',u.revShare,{suf:'%',step:0.5})}
-          <div></div><div></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="lsec-title" style="color:#7c3aed;margin-bottom:0">Erik Fees</div>
+          <span style="font-size:10px;color:#94a3b8">Edit in Erik Comp Model tab</span>
         </div>
-        <div style="margin-top:10px;font-size:11px;color:#94a3b8">
-          Dev Fee is added to Total CAPEX &nbsp;·&nbsp; Rev Share is applied to Pre-Erik EBITDA and appears in Operating Costs
+        <div class="g3">
+          <div>
+            <div class="label">Dev Fee (CAPEX)</div>
+            <div style="padding:7px 9px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;color:#334155;font-weight:600">${$(comp.devFee)}</div>
+          </div>
+          <div>
+            <div class="label">Rev Share</div>
+            <div style="padding:7px 9px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;color:#334155;font-weight:600">${comp.revShare}%</div>
+          </div>
+          <div>
+            <div class="label">Equity</div>
+            <div style="padding:7px 9px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;color:#334155;font-weight:600">${comp.equity}%</div>
+          </div>
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   return`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -282,9 +308,11 @@ function rSetup(){
 
 // ─── Tab: Unit P&L ─────────────────────────────────────────────────────────
 function rUnits(){
-  const all=S.units.map(u=>({...u,c:cu(u)}));
-  const sel=all.find(u=>u.id===S.sel)||all[0];
+  const all=S.units.map((u,i)=>({...u,c:cu(u,1,i)}));
+  const selIdx=Math.max(0,S.units.findIndex(u=>u.id===S.sel));
+  const sel=all[selIdx]||all[0];
   const c=sel.c,r=S.rev,cs=S.costs;
+  const selComp=c.comp||{devFee:35000,revShare:10,equity:0};
 
   const cards=all.map(u=>`
     <div class="usc" onclick="setSel(${u.id})"
@@ -317,41 +345,49 @@ function rUnits(){
     `${l} <span style="font-size:10px;color:#cbd5e1">${n}</span>`,
     `(${$(v)})`,'#64748b',false,true)).join('');
 
+  let cum5=0;
+  const fy5rows=RAMP.map((ramp,i)=>{
+    const yr=sel.oy+i;
+    const rc=cu(sel,ramp,selIdx);
+    cum5+=rc.ebitda;
+    const paidBack=cum5>=c.tCapex;
+    const justPaid=paidBack&&(cum5-rc.ebitda)<c.tCapex;
+    return`<tr style="background:${justPaid?'#f0fdf4':i%2===0?'#fff':'#fafbfc'};${justPaid?'font-weight:600':''}">
+      <td style="color:#334155">Year ${i+1} <span style="font-size:11px;color:#94a3b8;font-weight:400">(${yr})</span>
+        ${justPaid?`<span style="font-size:10px;font-weight:700;color:${GR};margin-left:6px">✓ Paid back</span>`:''}
+      </td>
+      <td style="color:#94a3b8">${ramp*100}%</td>
+      <td style="color:${CY}">${$(rc.rev)}</td>
+      <td style="color:${AM}">${$(rc.ebPre)}</td>
+      <td style="color:${PU}">(${$(rc.erikRS)})</td>
+      <td style="color:${rc.ebitda>0?CY:PK};font-weight:600">${$(rc.ebitda)}</td>
+      <td>${P(rc.margin)}</td>
+      <td style="color:${cum5>=c.tCapex?GR:'#334155'};font-weight:600">${$(cum5)}</td>
+    </tr>`;
+  }).join('');
+
   return`<div class="g2">
     <div>
       <div class="card"><div class="card-title">Select Location</div>${cards}</div>
-      <div class="card">
-        <div class="card-title">Investment — ${esc(sel.name)}</div>
-        ${pr('CAPEX (entered)',$(sel.capex),'#334155')}
-        ${pr('Dev Fee',$(sel.devFee),PU)}
-        ${pr('Total CAPEX',$(c.tCapex),CY,true,false,14)}
-        <div style="height:8px"></div>
-        ${pr('Annual EBITDA',$(c.ebitda),CY)}
-        ${pr('Simple Payback',c.payback<50?c.payback.toFixed(1)+' yrs':'N/A','#64748b')}
-        ${pr('Return on CAPEX',P(c.coc),c.coc>20?GR:AM)}
-      </div>
     </div>
     <div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">${mets}</div>
       <div class="card">
-        <div class="card-title">Annual P&L — ${esc(sel.name)}</div>
-        ${pr('▸ Revenue',$(c.rev),CY,true,false,14)}
-        ${pr(`Session revenue (${sel.rooms}r × ${r.sessions}/day × ${P(r.util)} util)`,$(c.sessRev),'#334155',false,true)}
-        ${pr(`Add-on revenue (${P(r.addon)} of session rev)`,$(c.addonRev),'#334155',false,true)}
-
-        ${pr('▸ Operating Costs',`(${$(c.opexPre)})`,PK,true,false,14)}
-        ${cRows}
-
-        <div style="border-top:1px dashed #e2e8f0;margin:6px 0"></div>
-        ${pr('Pre-Erik EBITDA',$(c.ebPre),AM,true,false,14)}
-
-        <div style="margin-top:4px;padding:8px 0 0">
-          <div style="font-size:11px;font-weight:700;color:#7c3aed;letter-spacing:.5px;margin-bottom:4px">ERIK FEES</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div class="card-title" style="margin-bottom:0">5-Year P&L — ${esc(sel.name)}</div>
+          <div style="font-size:11px;color:#94a3b8">Total CAPEX: <strong style="color:#334155">${$(c.tCapex)}</strong></div>
         </div>
-        ${pr(`Rev Share (${P(sel.revShare)} × Pre-Erik EBITDA)`,`(${$(c.erikRS)})`,PU,false,true)}
-
-        <div style="border-top:2px solid #e2e8f0;margin:6px 0"></div>
-        ${pr('EBITDA',$(c.ebitda),c.ebitda>0?CY:PK,true,false,15)}
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr>${['Year','Ramp','Revenue','Pre-Erik EBITDA','Erik Rev Share','EBITDA','Margin','Cumulative EBITDA'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+            <tbody>${fy5rows}</tbody>
+          </table>
+        </div>
+        <div style="margin-top:12px;padding:10px 14px;background:${c.payback<5?'#f0fdf4':'#f8fafc'};border:1px solid ${c.payback<5?'#bbf7d0':'#e2e8f0'};border-radius:8px;font-size:12px;color:${c.payback<5?'#15803d':'#64748b'}">
+          <strong>CAPEX Payback:</strong> ${c.payback<50?c.payback.toFixed(1)+' yrs':'N/A'} &nbsp;·&nbsp;
+          <strong>Y1 Cash-on-Cash:</strong> ${P(c.coc)} &nbsp;·&nbsp;
+          <strong>Steady-State EBITDA:</strong> ${$(cu(sel,1,selIdx).ebitda)}/yr
+        </div>
       </div>
     </div>
   </div>`;
@@ -409,6 +445,96 @@ function rPort(){
         </table>
       </div>
     </div>`;
+}
+
+// ─── Tab: Erik Comp Model ───────────────────────────────────────────────────
+function rComp(){
+  const rows=Array.from({length:20},(_,i)=>{
+    const comp=(S.comp&&S.comp[i])||{devFee:35000,revShare:10,equity:0};
+    const unit=S.units[i];
+    const nm=unit?`<span style="font-weight:700;color:#0f172a">${esc(unit.name)}</span>`:`<span style="color:#94a3b8">TBD${String(i+1).padStart(2,'0')}</span>`;
+    return`<tr style="background:${unit?'#fff':'#f8fafc'}">
+      <td style="font-weight:700;color:#64748b;font-size:12px">${String(i+1).padStart(2,'0')}</td>
+      <td>${nm}</td>
+      <td><div class="iw"><span class="pre">$</span>
+        <input type="number" id="comp-df-${i}" value="${comp.devFee}" step="1000" class="hp" onchange="inp('comp-df-${i}',this.value)" style="width:130px">
+      </div></td>
+      <td><div class="iw"><span class="suf">%</span>
+        <input type="number" id="comp-rs-${i}" value="${comp.revShare}" step="0.5" class="hs" onchange="inp('comp-rs-${i}',this.value)" style="width:100px">
+      </div></td>
+      <td><div class="iw"><span class="suf">%</span>
+        <input type="number" id="comp-eq-${i}" value="${comp.equity}" step="1" class="hs" onchange="inp('comp-eq-${i}',this.value)" style="width:100px">
+      </div></td>
+    </tr>`;
+  }).join('');
+  return`<div class="card">
+    <div class="card-title">Erik Comp Model</div>
+    <div style="font-size:11px;color:#94a3b8;margin-bottom:14px">
+      Define comp for up to 20 stores. Dev Fee and Rev Share flow into each location's P&L. Values shown read-only on the Locations tab.
+    </div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>#</th><th>Store</th><th>Dev Fee</th><th>Rev Share</th><th>Equity</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  </div>`;
+}
+
+// ─── Tab: Cash Flow ──────────────────────────────────────────────────────────
+function rCashFlow(){
+  if(!S.units.length)return`<div class="card">No locations defined yet.</div>`;
+  const minY=Math.min(...S.units.map(u=>u.oy));
+  const dist=S.distributions||[0,0,0,0,0];
+  let cum=0;
+  const rows=Array.from({length:5},(_,i)=>{
+    const yr=minY+i;
+    let ebPre=0,erikRS=0;
+    const capexOut=S.units.filter(u=>u.oy===yr).reduce((s,u)=>{
+      const ui=S.units.indexOf(u);
+      const comp=(S.comp&&S.comp[ui])||{devFee:u.devFee||35000};
+      return s+u.capex+comp.devFee;
+    },0);
+    S.units.forEach((u,ui)=>{
+      const n=yr-u.oy;if(n<0)return;
+      const rc=cu(u,RAMP[Math.min(n,4)],ui);
+      ebPre+=rc.ebPre;erikRS+=rc.erikRS;
+    });
+    const netOp=ebPre-erikRS;
+    const d=dist[i]||0;
+    const net=netOp-capexOut-d;
+    cum+=net;
+    return{yr,ebPre,erikRS,netOp,capexOut,d,net,cum,i};
+  });
+  const tRows=rows.map(({yr,ebPre,erikRS,netOp,capexOut,d,net,cum,i})=>`
+    <tr style="background:${i%2===0?'#fff':'#fafbfc'}">
+      <td style="font-weight:700;color:#334155">Year ${i+1} <span style="font-size:11px;color:#94a3b8;font-weight:400">(${yr})</span></td>
+      <td style="color:${GR};font-weight:600">${$(ebPre)}</td>
+      <td style="color:${PU}">(${$(erikRS)})</td>
+      <td style="color:${netOp>0?CY:PK};font-weight:600">${$(netOp)}</td>
+      <td style="color:${capexOut>0?PK:'#94a3b8'}">${capexOut>0?'('+$(capexOut)+')':'—'}</td>
+      <td><div class="iw"><span class="pre">$</span>
+        <input type="number" id="dist-${i}" value="${d}" step="5000" min="0" class="hp" onchange="inp('dist-${i}',this.value)" style="width:130px">
+      </div></td>
+      <td style="color:${net>=0?CY:PK};font-weight:600">${$(net)}</td>
+      <td style="color:${cum>=0?GR:PK};font-weight:700;font-size:14px">${$(cum)}</td>
+    </tr>`).join('');
+  const finalCum=rows[4]?.cum||0;
+  const P2=port();
+  const eSale=P2.tEB*(S.sale?.em||4),rSale=P2.tRev*(S.sale?.rm||1.5);
+  return`<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+      <div class="card-title" style="margin-bottom:0">5-Year Cash Flow</div>
+      <div style="font-size:11px;color:#94a3b8;text-align:right">Distributions are owner draws · Cash in bank does not convey with sale</div>
+    </div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr>${['Year','Pre-Erik EBITDA','Erik Rev Share','Net Op. Cash','CAPEX Out','Distributions','Net Cash Flow','Cash in Bank'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+      <tbody>${tRows}</tbody>
+    </table></div>
+    <div style="margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      ${mc('Cash in Bank at Year 5',$(finalCum),finalCum>=0?GR:PK,'After distributions, before sale')}
+      ${mc('EBITDA-Based Sale',$(eSale),CY,`At ${S.sale?.em||4}× EBITDA · Set in Sale tab`)}
+      ${mc('Revenue-Based Sale',$(rSale),AM,`At ${S.sale?.rm||1.5}× Revenue · Set in Sale tab`)}
+    </div>
+  </div>`;
 }
 
 // ─── Tab: 5-Year ────────────────────────────────────────────────────────────
@@ -539,6 +665,8 @@ function render(){
     {id:'units',    label:'📊 Unit P&L'},
     {id:'portfolio',label:'🏢 Portfolio'},
     {id:'forecast', label:'📈 5-Year'},
+    {id:'cashflow', label:'💵 Cash Flow'},
+    {id:'comp',     label:'🤝 Erik Comp'},
     {id:'sale',     label:'💰 Sale'},
   ];
   let body='';
@@ -547,6 +675,8 @@ function render(){
   if(S.tab==='units')     body=rUnits();
   if(S.tab==='portfolio') body=rPort();
   if(S.tab==='forecast')  body=rFY();
+  if(S.tab==='cashflow')  body=rCashFlow();
+  if(S.tab==='comp')      body=rComp();
   if(S.tab==='sale')      body=rSale();
 
   document.getElementById('app').innerHTML=`
@@ -594,6 +724,20 @@ function inp(id,val){
   else if(id==='sale-em'){S.sale.em=isNaN(n)?1:n;}
   else if(id==='sale-rm'){S.sale.rm=isNaN(n)?1:n;}
   else{
+    // comp fields: comp-df-{i}, comp-rs-{i}, comp-eq-{i}
+    const cm2=id.match(/^comp-(df|rs|eq)-(\d+)$/);
+    if(cm2){
+      const fmap={df:'devFee',rs:'revShare',eq:'equity'};
+      const idx=parseInt(cm2[2]);
+      if(!S.comp)S.comp=DEFCOMP.map(c=>({...c}));
+      S.comp[idx]={...S.comp[idx],[fmap[cm2[1]]]:isNaN(n)?0:n};
+    }
+    // distributions: dist-{i}
+    const dm=id.match(/^dist-(\d+)$/);
+    if(dm){
+      if(!S.distributions)S.distributions=[0,0,0,0,0];
+      S.distributions[parseInt(dm[1])]=isNaN(n)?0:n;
+    }
     const m=id.match(/^u([a-z]+)-(\d+)$/);
     if(m){
       const uid=parseInt(m[2]),f=m[1];
