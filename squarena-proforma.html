@@ -862,7 +862,137 @@ function rComp(){
         <thead><tr><th>Store Range</th><th>Dev Fee</th></tr></thead>
         <tbody>${dfTierRows}</tbody>
       </table>
-    </div>`;
+    </div>
+    ${(()=>{
+      if(!S.units.length)return'';
+      const retRates=S.retentionRates||[10,10,10,10,10];
+      const paybackRate=(S.capexPaybackRate||90)/100;
+      const km=v=>{const a=Math.abs(v);if(a===0)return'—';if(a>=1000)return(v<0?'-':'')+'$'+(a/1000).toFixed(1)+'k';return(v<0?'-$':'$')+Math.round(a);};
+
+      // Find calendar start: earliest store open
+      const minOy=Math.min(...S.units.map(u=>u.oy));
+      const minOm=Math.min(...S.units.filter(u=>u.oy===minOy).map(u=>u.om));
+
+      // Precompute per-store 60-month excess cash flow (same logic as Monthly CF)
+      const storeData=S.units.map((u,ui)=>{
+        const devFee=storeDevFee(ui+1);
+        let bal=u.capex+devFee;
+        return Array.from({length:120},(_,m)=>{
+          const yr=Math.floor(m/12);
+          const ramp=(S.ramp||RAMP)[Math.min(yr,4)];
+          const cMult=curveMult(u.curve||'flat',m,u.om);
+          const rc=cu(u,ramp*cMult,ui);
+          const mEB=rc.ebitda/12;
+          const retPct=(retRates[Math.min(yr,4)]||0)/100;
+          const mRetain=Math.max(0,mEB)*retPct;
+          const afterRet=Math.max(0,mEB-mRetain);
+          const pmt=bal>0?Math.min(bal,afterRet*paybackRate):0;
+          bal=Math.max(0,bal-pmt);
+          return{mExcess:afterRet-pmt};
+        });
+      });
+
+      // Build 60 calendar months
+      const calMonths=Array.from({length:60},(_,m)=>{
+        const total=minOm-1+m;
+        const calYear=minOy+Math.floor(total/12);
+        const calMonth=(total%12)+1;
+        // Dev fees: stores opening this exact calendar month
+        let devFeeIncome=0;
+        S.units.forEach((u,ui)=>{
+          if(u.oy===calYear&&u.om===calMonth)devFeeIncome+=storeDevFee(ui+1);
+        });
+        // System excess cash flow this month
+        let sysExcess=0;
+        S.units.forEach((u,ui)=>{
+          const storeAge=(calYear-u.oy)*12+(calMonth-u.om);
+          if(storeAge>=0&&storeAge<120)sysExcess+=storeData[ui][storeAge].mExcess;
+        });
+        const fleet=fleetSizeAt(calYear,calMonth);
+        const erikPct=equityPctForFleet(fleet)/100;
+        const erikDist=sysExcess*erikPct;
+        const totalIncome=devFeeIncome+erikDist;
+        return{calYear,calMonth,devFeeIncome,sysExcess,erikDist,erikPct,fleet,totalIncome};
+      });
+
+      const YC=['#eff6ff','#f0fdf4','#fffbeb','#fdf4ff','#fff1f2'];
+      const YH=['#dbeafe','#dcfce7','#fef9c3','#f3e8ff','#ffe4e6'];
+      const MNAMES=['J','F','M','A','M','J','J','A','S','O','N','D'];
+
+      // Determine year spans for headers
+      let yrSpans=[];
+      calMonths.forEach((cm,i)=>{
+        const lbl=`${cm.calYear}`;
+        if(!yrSpans.length||yrSpans[yrSpans.length-1].lbl!==lbl)yrSpans.push({lbl,start:i,count:1,idx:yrSpans.length});
+        else yrSpans[yrSpans.length-1].count++;
+      });
+      const yrHds=yrSpans.map(s=>`<th colspan="${s.count}" style="text-align:center;font-size:10px;font-weight:700;color:#334155;background:${YH[s.idx%5]};padding:3px 0;border-right:2px solid #e2e8f0">${s.lbl}</th>`).join('');
+      const mHds=calMonths.map((cm,i)=>{
+        const isJan=cm.calMonth===1;
+        const y=yrSpans.findIndex(s=>i>=s.start&&i<s.start+s.count);
+        return`<th style="min-width:36px;font-size:8px;color:${cm.devFeeIncome>0?AM:'#94a3b8'};background:${YC[y%5]};padding:3px 2px;text-align:center;border-right:${isJan?'2px solid #e2e8f0':'none'};font-weight:${cm.devFeeIncome>0?700:400}">${MNAMES[cm.calMonth-1]}${cm.calMonth===1?cm.calYear.toString().slice(2):''}</th>`;
+      }).join('');
+
+      const makeRow=(label,vals,colorFn,bold=false,sep=false,indent=false)=>{
+        const cells=vals.map((v,i)=>{
+          const isJan=calMonths[i].calMonth===1;
+          const y=yrSpans.findIndex(s=>i>=s.start&&i<s.start+s.count);
+          return`<td style="text-align:right;font-size:9px;padding:2px 3px;color:${colorFn(v,i)};background:${YC[y%5]};white-space:nowrap;border-right:${isJan?'2px solid #e2e8f0':'none'}">${km(v)}</td>`;
+        }).join('');
+        return`<tr style="${sep?'border-top:2px solid #e2e8f0':''}">
+          <td style="font-size:10px;font-weight:${bold?700:500};color:#334155;padding:${indent?'3px 10px 3px 22px':'4px 10px'};white-space:nowrap;position:sticky;left:0;background:#fff;z-index:1;border-right:2px solid #e2e8f0;min-width:150px">${indent?'↳ ':''}<span>${label}</span></td>
+          ${cells}
+        </tr>`;
+      };
+      const makeInfoRow=(label,vals,colorFn)=>{
+        const cells=vals.map((v,i)=>{
+          const isJan=calMonths[i].calMonth===1;
+          const y=yrSpans.findIndex(s=>i>=s.start&&i<s.start+s.count);
+          return`<td style="text-align:center;font-size:8px;padding:2px 3px;color:${colorFn(v,i)};background:${YC[y%5]};white-space:nowrap;border-right:${isJan?'2px solid #e2e8f0':'none'}">${v}</td>`;
+        }).join('');
+        return`<tr>
+          <td style="font-size:9px;font-weight:400;color:#94a3b8;padding:3px 10px;white-space:nowrap;position:sticky;left:0;background:#f8fafc;z-index:1;border-right:2px solid #e2e8f0;min-width:150px">${label}</td>
+          ${cells}
+        </tr>`;
+      };
+
+      const cumIncome=[];let c=0;
+      calMonths.forEach(cm=>{c+=cm.totalIncome;cumIncome.push(c);});
+
+      return`<div class="card" style="border-top:3px solid ${PU}">
+        <div class="card-title" style="color:${PU}">ErikCo Monthly Income — 60 Month Outlook</div>
+        <div style="font-size:11px;color:#94a3b8;margin-bottom:14px">
+          Dev fees received at store opening · Distribution = ErikCo equity % × system excess cash flow · Equity % steps up fleet-wide at milestones
+        </div>
+        <div style="overflow-x:auto">
+          <table style="border-collapse:collapse">
+            <thead>
+              <tr>
+                <th style="position:sticky;left:0;background:#fff;z-index:2;min-width:150px;border-right:2px solid #e2e8f0"></th>
+                ${yrHds}
+              </tr>
+              <tr>
+                <th style="position:sticky;left:0;background:#f8fafc;z-index:2;font-size:9px;color:#94a3b8;padding:3px 10px;border-right:2px solid #e2e8f0">Month →</th>
+                ${mHds}
+              </tr>
+            </thead>
+            <tbody>
+              ${makeInfoRow('Open Stores',calMonths.map(m=>m.fleet),()=>'#64748b')}
+              ${makeInfoRow('Erik Equity %',calMonths.map(m=>(m.erikPct*100).toFixed(0)+'%'),(v,i)=>calMonths[i].erikPct>0?PU:'#94a3b8')}
+              ${makeRow('Dev Fee Income',calMonths.map(m=>m.devFeeIncome),(v)=>v>0?AM:'#cbd5e1',false,true)}
+              ${makeRow('Distribution',calMonths.map(m=>m.erikDist),(v)=>v>0?GR:'#cbd5e1')}
+              ${makeRow('Total Income',calMonths.map(m=>m.totalIncome),(v)=>v>0?CY:'#cbd5e1',true,true)}
+              ${makeRow('Cumulative',cumIncome,(v)=>v>0?GR:PK,false,false,true)}
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:#94a3b8">
+          <strong style="color:${CY}">60-Month Cumulative Income: ${$(cumIncome[59]||0)}</strong>
+          &nbsp;·&nbsp; Dev Fees: ${$(calMonths.reduce((s,m)=>s+m.devFeeIncome,0))}
+          &nbsp;·&nbsp; Distributions: ${$(calMonths.reduce((s,m)=>s+m.erikDist,0))}
+        </div>
+      </div>`;
+    })()}`;
 }
 
 // ─── Tab: Cash Flow ──────────────────────────────────────────────────────────
