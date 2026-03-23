@@ -1125,6 +1125,115 @@ function rSale(){
     </div>`;
 }
 
+// ─── Tab: Monthly Cash Flow ──────────────────────────────────────────────────
+function rMonthlyCF(){
+  if(!S.units.length)return`<div class="card">No locations defined yet.</div>`;
+  const retRates=S.retentionRates||[10,10,10,10,10];
+  const paybackRate=(S.capexPaybackRate||90)/100;
+  const km=n=>{
+    const a=Math.abs(n);
+    if(a>=1000)return(n<0?'-':'')+'$'+(a/1000).toFixed(1)+'k';
+    return(n<0?'-$':'$')+Math.round(a);
+  };
+  return S.units.map((u,ui)=>{
+    const devFee=storeDevFee(ui+1);
+    let capexBal=u.capex+devFee;
+    const months=Array.from({length:60},(_,m)=>{
+      const yr=Math.floor(m/12);
+      const ramp=(S.ramp||RAMP)[Math.min(yr,4)];
+      const cMult=curveMult(u.curve||'flat',m,u.om);
+      const rc=cu(u,ramp*cMult,ui);
+      const mRev=rc.rev/12;
+      const mExp=rc.opexPre/12;
+      const mEB=rc.ebitda/12;
+      const retPct=(retRates[Math.min(yr,4)]||0)/100;
+      const mRetain=Math.max(0,mEB)*retPct;
+      const afterRet=Math.max(0,mEB-mRetain);
+      const mPayback=capexBal>0?Math.min(capexBal,afterRet*paybackRate):0;
+      capexBal=Math.max(0,capexBal-mPayback);
+      const mExcess=afterRet-mPayback;
+      const paid=capexBal===0;
+      return{mRev,mExp,mEB,mRetain,mPayback,mExcess,paid,yr};
+    });
+    // find payoff month
+    const payoffM=months.findIndex(m=>m.paid&&(m===months[0]||!months[months.indexOf(m)-1].paid));
+    const actualPayoff=months.findIndex((m,i)=>m.paid&&(i===0||!months[i-1].paid));
+
+    const YR_COLORS=['#eff6ff','#f0fdf4','#fffbeb','#fdf4ff','#fff1f2'];
+    const YR_HD=['#dbeafe','#dcfce7','#fef9c3','#f3e8ff','#ffe4e6'];
+
+    // year header row (spans 12 cols each)
+    const yrHds=Array.from({length:5},(_,y)=>
+      `<th colspan="12" style="text-align:center;font-size:10px;font-weight:700;color:#334155;background:${YR_HD[y]};padding:3px 0;border-right:2px solid #e2e8f0">
+        Year ${y+1} · ${u.oy+y}
+      </th>`).join('');
+
+    // month header row
+    const mHds=Array.from({length:60},(_,m)=>{
+      const y=Math.floor(m/12);
+      const calMonth=((u.om-1+m)%12);
+      const lbl=['J','F','M','A','M','J','J','A','S','O','N','D'][calMonth];
+      const paid=months[m].paid;
+      return`<th style="min-width:38px;font-size:8px;color:${paid?GR:'#94a3b8'};background:${paid?'#f0fdf4':YR_COLORS[y]};padding:3px 2px;text-align:center;border-right:${(m+1)%12===0?'2px solid #e2e8f0':'none'}">${lbl}${Math.floor(m/12)+1}</th>`;
+    }).join('');
+
+    const makeRow=(label,vals,color,bold=false,sep=false)=>{
+      const cells=vals.map((v,m)=>{
+        const y=Math.floor(m/12);
+        const paid=months[m].paid;
+        const bg=paid?'#f0fdf4':YR_COLORS[y];
+        return`<td style="text-align:right;font-size:9px;padding:2px 3px;color:${v<0?PK:v===0?'#cbd5e1':color};background:${bg};white-space:nowrap;border-right:${(m+1)%12===0?'2px solid #e2e8f0':'none'}">${km(v)}</td>`;
+      }).join('');
+      return`<tr style="${sep?'border-top:2px solid #e2e8f0':''}">
+        <td style="font-size:10px;font-weight:${bold?700:500};color:#334155;padding:4px 10px;white-space:nowrap;position:sticky;left:0;background:#fff;z-index:1;border-right:2px solid #e2e8f0;min-width:120px">${label}</td>
+        ${cells}
+      </tr>`;
+    };
+
+    const sn=String(ui+1).padStart(2,'0');
+    const payoffTxt=actualPayoff>=0
+      ?`Month ${actualPayoff+1} — ${MONTHS[((u.om-1+actualPayoff)%12)]}, ${u.oy+Math.floor(actualPayoff/12)}`
+      :'Beyond 60 months';
+
+    return`<div class="card" style="margin-bottom:20px;padding:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <span style="font-size:11px;font-weight:700;color:#fff;background:#94a3b8;border-radius:4px;padding:3px 8px">STORE ${sn}</span>
+        <span style="font-weight:700;color:#334155;font-size:15px">${esc(u.name)}</span>
+        <span style="font-size:11px;color:#94a3b8">${u.rooms} rooms · Opens ${MONTHS[u.om-1].slice(0,3)} ${u.oy}</span>
+        <span style="margin-left:auto;font-size:11px;font-weight:600;color:#334155">Total CAPEX: <span style="color:${CY}">${$(u.capex+devFee)}</span></span>
+        <span style="font-size:11px;font-weight:600;color:#334155">CAPEX Repaid: <span style="color:${GR}">${payoffTxt}</span></span>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="border-collapse:collapse">
+          <thead>
+            <tr>
+              <th style="position:sticky;left:0;background:#fff;z-index:2;min-width:120px;border-right:2px solid #e2e8f0"></th>
+              ${yrHds}
+            </tr>
+            <tr>
+              <th style="position:sticky;left:0;background:#f8fafc;z-index:2;font-size:9px;color:#94a3b8;padding:3px 10px;border-right:2px solid #e2e8f0">Month →</th>
+              ${mHds}
+            </tr>
+          </thead>
+          <tbody>
+            ${makeRow('Revenue',         months.map(m=>m.mRev),   CY)}
+            ${makeRow('Expenses',        months.map(m=>-m.mExp),  '#64748b')}
+            ${makeRow('EBITDA',          months.map(m=>m.mEB),    '#334155',true,true)}
+            ${makeRow('Retention',       months.map(m=>-m.mRetain),AM)}
+            ${makeRow('CAPEX Payback',   months.map(m=>-m.mPayback),PK)}
+            ${makeRow('Excess Cash Flow',months.map(m=>m.mExcess), GR,true,true)}
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:20px;flex-wrap:wrap;font-size:11px;color:#94a3b8">
+        <span><span style="display:inline-block;width:10px;height:10px;background:${YR_COLORS[0]};border:1px solid #e2e8f0;margin-right:4px;border-radius:2px"></span>Pre-payoff months</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#f0fdf4;border:1px solid #bbf7d0;margin-right:4px;border-radius:2px"></span>Post-payoff (CAPEX repaid)</span>
+        <span style="margin-left:auto">Retention: <strong>${retRates.slice(0,5).map((r,i)=>`Y${i+1} ${r}%`).join(' · ')}</strong> &nbsp;·&nbsp; CAPEX Payback rate: <strong>${S.capexPaybackRate||90}%</strong> of post-retention EBITDA</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 // ─── Render ─────────────────────────────────────────────────────────────────
 function render(){
   const fid=document.activeElement?document.activeElement.id:null;
@@ -1139,6 +1248,7 @@ function render(){
     {id:'portfolio',label:'Portfolio'},
     {id:'forecast', label:'5-Year'},
     {id:'cashflow', label:'Cash Flow'},
+    {id:'monthly',  label:'Monthly CF'},
     {id:'comp',     label:'Erik Comp'},
     {id:'sale',     label:'Sale'},
   ];
@@ -1151,6 +1261,7 @@ function render(){
   if(S.tab==='portfolio') body=rPort();
   if(S.tab==='forecast')  body=rFY();
   if(S.tab==='cashflow')  body=rCashFlow();
+  if(S.tab==='monthly')   body=rMonthlyCF();
   if(S.tab==='comp')      body=rComp();
   if(S.tab==='sale')      body=rSale();
 
