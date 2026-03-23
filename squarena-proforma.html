@@ -161,6 +161,17 @@ function fleetEquityPct(){
   for(const tier of tiers){if(n>=tier.t)pct=tier.p;}
   return pct;
 }
+// equity % for a given fleet size (parameterized version of fleetEquityPct)
+function equityPctForFleet(n){
+  const tiers=S.equityTiers||DEFEQTIERS;
+  let pct=0;
+  for(const tier of tiers){if(n>=tier.t)pct=tier.p;}
+  return pct;
+}
+// how many stores are open at a given calendar year+month (1-based month)
+function fleetSizeAt(calYear,calMonth){
+  return S.units.filter(u=>u.oy<calYear||(u.oy===calYear&&u.om<=calMonth)).length;
+}
 // storeDevFee: returns dev fee for store at position storeNum (1-based)
 function storeDevFee(storeNum){
   const tiers=S.devFeeTiers||DEFDFTIERS;
@@ -1153,7 +1164,14 @@ function rMonthlyCF(){
       capexBal=Math.max(0,capexBal-mPayback);
       const mExcess=afterRet-mPayback;
       const paid=capexBal===0;
-      return{mRev,mExp,mEB,mRetain,mPayback,mExcess,paid,yr};
+      // equity split — based on live fleet size at this calendar month
+      const calYear=u.oy+Math.floor((u.om-1+m)/12);
+      const calMonth=((u.om-1+m)%12)+1;
+      const fleetN=fleetSizeAt(calYear,calMonth);
+      const erikPct=equityPctForFleet(fleetN)/100;
+      const mErik=mExcess*erikPct;
+      const mJXJ=mExcess-mErik;
+      return{mRev,mExp,mEB,mRetain,mPayback,mExcess,mErik,mJXJ,erikPct,paid,yr};
     });
     // find payoff month
     const payoffM=months.findIndex(m=>m.paid&&(m===months[0]||!months[months.indexOf(m)-1].paid));
@@ -1177,7 +1195,7 @@ function rMonthlyCF(){
       return`<th style="min-width:38px;font-size:8px;color:${paid?GR:'#94a3b8'};background:${paid?'#f0fdf4':YR_COLORS[y]};padding:3px 2px;text-align:center;border-right:${(m+1)%12===0?'2px solid #e2e8f0':'none'}">${lbl}${Math.floor(m/12)+1}</th>`;
     }).join('');
 
-    const makeRow=(label,vals,color,bold=false,sep=false)=>{
+    const makeRow=(label,vals,color,bold=false,sep=false,indent=false,labelSuffix='')=>{
       const cells=vals.map((v,m)=>{
         const y=Math.floor(m/12);
         const paid=months[m].paid;
@@ -1185,7 +1203,7 @@ function rMonthlyCF(){
         return`<td style="text-align:right;font-size:9px;padding:2px 3px;color:${v<0?PK:v===0?'#cbd5e1':color};background:${bg};white-space:nowrap;border-right:${(m+1)%12===0?'2px solid #e2e8f0':'none'}">${km(v)}</td>`;
       }).join('');
       return`<tr style="${sep?'border-top:2px solid #e2e8f0':''}">
-        <td style="font-size:10px;font-weight:${bold?700:500};color:#334155;padding:4px 10px;white-space:nowrap;position:sticky;left:0;background:#fff;z-index:1;border-right:2px solid #e2e8f0;min-width:120px">${label}</td>
+        <td style="font-size:10px;font-weight:${bold?700:500};color:#334155;padding:${indent?'3px 10px 3px 22px':'4px 10px'};white-space:nowrap;position:sticky;left:0;background:#fff;z-index:1;border-right:2px solid #e2e8f0;min-width:140px">${indent?'↳ ':''}<span style="color:${color}">${label}</span>${labelSuffix}</td>
         ${cells}
       </tr>`;
     };
@@ -1222,6 +1240,27 @@ function rMonthlyCF(){
             ${makeRow('Retention',       months.map(m=>-m.mRetain),AM)}
             ${makeRow('CAPEX Payback',   months.map(m=>-m.mPayback),PK)}
             ${makeRow('Excess Cash Flow',months.map(m=>m.mExcess), GR,true,true)}
+            ${makeRow('JXJ Share',       months.map(m=>m.mJXJ),   GR,false,false,true)}
+            ${(()=>{
+              // build per-month label suffix showing equity % when it changes
+              const erikLabel=`ErikCo Share`;
+              const cells=months.map((mo,m)=>{
+                const y=Math.floor(m/12);
+                const paid=mo.paid;
+                const bg=paid?'#f0fdf4':YR_COLORS[y];
+                // detect tier change
+                const prevPct=m>0?months[m-1].erikPct:null;
+                const changed=prevPct!==null&&mo.erikPct!==prevPct;
+                return`<td style="text-align:right;font-size:9px;padding:2px 3px;color:${mo.mErik===0?'#cbd5e1':PU};background:${bg};white-space:nowrap;border-right:${(m+1)%12===0?'2px solid #e2e8f0':'none'}">
+                  ${changed?`<div style="font-size:7px;color:${PU};font-weight:700">${(mo.erikPct*100).toFixed(0)}%▲</div>`:''}
+                  ${km(mo.mErik)}
+                </td>`;
+              }).join('');
+              return`<tr>
+                <td style="font-size:10px;font-weight:500;color:${PU};padding:3px 10px 3px 22px;white-space:nowrap;position:sticky;left:0;background:#fff;z-index:1;border-right:2px solid #e2e8f0;min-width:140px">↳ ErikCo Share</td>
+                ${cells}
+              </tr>`;
+            })()}
           </tbody>
         </table>
       </div>
